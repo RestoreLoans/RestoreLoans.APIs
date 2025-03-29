@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from ..database import get_db
-from ..schemas.loan import LoanResponse, LoanCreate
-from ..services.auth import AuthService
+from app.database import get_db
+from app.schemas.loan import LoanResponse, LoanCreate
+from app.services.auth import AuthService
 
 router = APIRouter(
     prefix="/loans",
