@@ -31,4 +31,4 @@ class AlertResponse(AlertBase):
     date_time: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

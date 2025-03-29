@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Date, Enum, ForeignKey
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
-from ..database import Base
+from app.database import Base
 import enum
 
 class LoanType(str, enum.Enum):

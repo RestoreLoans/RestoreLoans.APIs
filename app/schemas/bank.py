@@ -24,4 +24,4 @@ class BankResponse(BankBase):
     updated_at: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True

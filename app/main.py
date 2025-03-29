@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from routes import auth, user, loan, bank, document, history, alert, sms, transaction
-from .database import engine, Base
+from database import engine, Base
 
 Base.metadata.create_all(bind=engine)
 
