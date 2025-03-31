@@ -1,8 +1,9 @@
 from sqlalchemy import Column, Integer, String, Boolean, Date, Enum
-from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.sqltypes import TIMESTAMP,DateTime
 from sqlalchemy.sql.expression import text
 from app.database import Base
 import enum
+from datetime import datetime
 
 class Gender(str, enum.Enum):
     male = "male"
@@ -21,4 +22,4 @@ class User(Base):
     gender = Column(Enum(Gender), nullable=False)
     password = Column(String, nullable=False)
     is_active = Column(Boolean, server_default='TRUE', nullable=False)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
+    created_at = Column(DateTime, nullable=False,default=datetime.utcnow )
