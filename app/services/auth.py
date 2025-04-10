@@ -11,6 +11,7 @@ from ..schemas.user import UserCreate, UserResponse
 from ..utils.security import create_access_token, verify_password, get_password_hash
 import random
 import string
+from app.schemas.user import UserResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -89,3 +90,20 @@ class AuthService:
         if len(otp) != 6 or not otp.isdigit():
             raise HTTPException(status_code=400, detail="Invalid OTP format")
         return {"message": "OTP verified successfully"}
+    
+    # @staticmethod
+    # def get_current_user(db: Session, user_data: UserCreate) -> UserResponse:
+    #     user = db.query(User).filter(User.email == user_data.email).first()
+    #     if not user:
+    #         raise HTTPException(status_code=404, detail="User not found")
+        
+    #     # Convert SQLAlchemy User model to Pydantic UserResponse schema
+    #     return UserResponse(
+    #         id=user.id,
+    #         first_name=user.first_name,
+    #         last_name=user.last_name,
+    #         email=user.email,
+    #         phone_number=user.phone_number,
+    #         gender=user.gender,
+    #         is_active=user.is_active
+    #     )

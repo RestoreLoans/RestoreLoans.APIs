@@ -30,3 +30,7 @@ def forgot_username(forgot_data: UserForgotUsername, db: Session = Depends(get_d
 @router.post("/verify-otp")
 def verify_otp(otp_data: UserOTP, db: Session = Depends(get_db)):
     return AuthService.verify_otp(db, otp_data.phone_number, otp_data.otp)
+
+# @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
+# def get_current_user(user_data: UserCreate, db: Session = Depends(get_db)):
+#     return AuthService.get_current_user(db, user_data)
