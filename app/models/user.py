@@ -22,4 +22,4 @@ class User(Base):
     gender = Column(Enum(Gender), nullable=False)
     password = Column(String, nullable=False)
     is_active = Column(Boolean, server_default='TRUE', nullable=False)
-    created_at = Column(DateTime, nullable=False,default=datetime.utcnow )
+    created_at = Column(Date, nullable=False, default=lambda: datetime.utcnow().date())
