@@ -16,4 +16,4 @@ class StatementHistoryResponse(StatementHistoryBase):
     statement_date: datetime  # Automatically set by the database
 
     class Config:
-        orm_mode = True
+        from_attributes= True

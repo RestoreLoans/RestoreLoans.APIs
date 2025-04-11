@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from enum import Enum
 from datetime import date, datetime
 
@@ -24,11 +24,11 @@ class DocumentResponse(DocumentBase):
     status: DocumentStatus
     upload_date: date
 
-    @validator("upload_date", pre=True)
+    @field_validator("upload_date", mode="before")
     def parse_datetime_to_date(cls, value):
         if isinstance(value, datetime):
             return value.date()
         return value
 
     class Config:
-        orm_mode = True
+        from_attributes = True
