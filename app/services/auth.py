@@ -12,12 +12,16 @@ from ..utils.security import create_access_token, verify_password, get_password_
 import random
 import string
 from app.schemas.user import UserResponse
+from app.schemas.userRoles import UserRoleResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
     @staticmethod
+    def some_method():
+        pass  # Replace with actual implementation or remove if unnecessary
+
     def register_user(db: Session, user_data: UserCreate):
         # Check if email already exists
         db_user = db.query(User).filter(User.email == user_data.email).first()
@@ -90,20 +94,13 @@ class AuthService:
         if len(otp) != 6 or not otp.isdigit():
             raise HTTPException(status_code=400, detail="Invalid OTP format")
         return {"message": "OTP verified successfully"}
+
+    @staticmethod
+    def user_roles(db: Session, user_id: int):
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        roles = db.query(UserRoleResponse).filter(UserRoleResponse.user_id == user_id).all()
+        return {"user": UserResponse.from_orm(user), "roles": roles}
     
-    # @staticmethod
-    # def get_current_user(db: Session, user_data: UserCreate) -> UserResponse:
-    #     user = db.query(User).filter(User.email == user_data.email).first()
-    #     if not user:
-    #         raise HTTPException(status_code=404, detail="User not found")
-        
-    #     # Convert SQLAlchemy User model to Pydantic UserResponse schema
-    #     return UserResponse(
-    #         id=user.id,
-    #         first_name=user.first_name,
-    #         last_name=user.last_name,
-    #         email=user.email,
-    #         phone_number=user.phone_number,
-    #         gender=user.gender,
-    #         is_active=user.is_active
-    #     )
