@@ -11,6 +11,14 @@ router = APIRouter(
 
 @router.post("/", response_model=StatementHistoryResponse, status_code=status.HTTP_201_CREATED)
 def create_statement_history(history_data: StatementHistoryCreate, db: Session = Depends(get_db)):
+    # Check if the loan_id exists in the loans table
+    loan_exists = db.query(StatementHistory).filter_by(loan_id=history_data.loan_id).first()
+    if not loan_exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Loan with id {history_data.loan_id} does not exist."
+        )
+
     # Create a new statement history instance
     new_history = StatementHistory(
         user_id=history_data.user_id,
