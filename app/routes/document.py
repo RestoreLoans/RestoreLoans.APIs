@@ -1,46 +1,56 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models.document import Document
+from app.models.loan import Loan
 from app.schemas.document import DocumentResponse
-from app.services.auth import AuthService
 import os
-from fastapi import HTTPException, status
-from app.models.document import Document  # Assuming Document is the SQLAlchemy model for documents
-from datetime import datetime
 
 router = APIRouter(
     prefix="/documents",
     tags=["Documents"]
 )
-UPLOAD_DIRECTORY = "uploaded_documents"  # Directory to save uploaded files
 
-@router.post("/upload", response_model=DocumentResponse)
-async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # Ensure the upload directory exists
-    if not os.path.exists(UPLOAD_DIRECTORY):
-        os.makedirs(UPLOAD_DIRECTORY)
-
-    # Save the uploaded file to the upload directory
-    file_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
-    try:
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-    except Exception as e:
+@router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+def upload_document(
+    user_id: int,
+    loan_id: int,
+    document_name: str,
+    document_status: str,
+    remarks: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    # Check if the loan exists
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save the file: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Loan with ID {loan_id} does not exist."
         )
 
-    # Create a new document entry in the database
+    # Save the uploaded file to a directory
+    upload_dir = "uploaded_files"
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, file.filename)
+    with open(file_path, "wb") as f:
+        f.write(file.file.read())
+
+    # Create a new document instance
     new_document = Document(
+        user_id=user_id,
+        loan_id=loan_id,
         file_name=file.filename,
+        document_name=document_name,
         file_path=file_path,
-        uploaded_at=datetime.utcnow()
+        file_size=os.path.getsize(file_path),
+        status=document_status,
+        remarks=remarks
     )
 
     # Add the document to the database
     db.add(new_document)
     db.commit()
-    db.refresh(new_document)  # Refresh to get the updated data from the database
+    db.refresh(new_document)
 
     return new_document

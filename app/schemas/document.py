@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from enum import Enum
-from datetime import date
+from datetime import date, datetime
 
 class DocumentStatus(str, Enum):
     pending = "pending"
@@ -9,6 +9,7 @@ class DocumentStatus(str, Enum):
 
 class DocumentBase(BaseModel):
     document_name: str
+    file_name: str  # Added file_name to match the JSON
     file_path: str
     file_size: int
     remarks: str = None
@@ -23,5 +24,11 @@ class DocumentResponse(DocumentBase):
     status: DocumentStatus
     upload_date: date
 
+    @validator("upload_date", pre=True)
+    def parse_datetime_to_date(cls, value):
+        if isinstance(value, datetime):
+            return value.date()
+        return value
+
     class Config:
-        from_attributes = True
+        orm_mode = True
