@@ -22,7 +22,7 @@ class LoanBase(BaseModel):
     end_date: date
 
 class LoanCreate(LoanBase):
-    pass
+    user_id: int  # The ID of the user associated with the loan
 
 class LoanResponse(LoanBase):
     id: int
