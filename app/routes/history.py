@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.history import StatementHistory
+from app.models.loan import Loan
 from app.schemas.history import StatementHistoryCreate, StatementHistoryResponse
 
 router = APIRouter(
@@ -12,7 +13,8 @@ router = APIRouter(
 @router.post("/", response_model=StatementHistoryResponse, status_code=status.HTTP_201_CREATED)
 def create_statement_history(history_data: StatementHistoryCreate, db: Session = Depends(get_db)):
     # Check if the loan_id exists in the loans table
-    loan_exists = db.query(StatementHistory).filter_by(loan_id=history_data.loan_id).first()
+    print(f"Checking if loan_id {history_data.loan_id} exists in the database...")
+    loan_exists = db.query(Loan).filter_by(id=history_data.loan_id).first()
     if not loan_exists:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
