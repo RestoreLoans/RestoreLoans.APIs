@@ -10,6 +10,7 @@ from ..models.user import User
 from ..schemas.user import UserCreate, UserResponse
 from ..utils.security import create_access_token, verify_password, get_password_hash
 import random
+import hashlib
 import string
 from app.schemas.user import UserResponse
 from app.schemas.userRoles import UserRoleResponse
@@ -103,4 +104,9 @@ class AuthService:
 
         roles = db.query(UserRoleResponse).filter(UserRoleResponse.user_id == user_id).all()
         return {"user": UserResponse.from_orm(user), "roles": roles}
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        # Hash the password using SHA-256
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
     
