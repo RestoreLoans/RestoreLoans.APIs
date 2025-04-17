@@ -1,31 +1,58 @@
 from pydantic import BaseModel
-from enum import Enum
-from datetime import datetime
+from typing import Optional
 
-class TransactionType(str, Enum):
-    credit = "credit"
-    debit = "debit"
-    transfer = "transfer"
-    payment = "payment"
-
-class TransactionStatus(str, Enum):
-    pending = "pending"
-    completed = "completed"
-    failed = "failed"
-
-class TransactionBase(BaseModel):
-    transaction_type: TransactionType
+class TransactionCreate(BaseModel):
+    user_id: int
+    loan_id: int
+    transaction_type: str
     amount: float
-    currency: str = "ZAR"
+    amount_from: Optional[float] = None
+    currency: str
     account_number: str
-    remarks: str = None
+    status: str
+    date_time: str
+    payment_date: Optional[str] = None
+    returned_payment: Optional[float] = None
+    interest_payed: Optional[float] = None
+    period: Optional[int] = None
+    remarks: Optional[str] = None
 
-class TransactionResponse(TransactionBase):
+class TransactionUpdate(BaseModel):
+    """
+    Schema for updating a transaction.
+    """
+    id: Optional[int] = None
+    user_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    transaction_type: Optional[str] = None
+    amount: Optional[float] = None
+    amount_from: Optional[float] = None
+    currency: Optional[str] = None
+    account_number: Optional[str] = None
+    status: Optional[str] = None
+    date_time: Optional[str] = None
+    payment_date: Optional[str] = None
+    returned_payment: Optional[float] = None
+    interest_payed: Optional[float] = None
+    period: Optional[int] = None
+    remarks: Optional[str] = None
+
+class TransactionResponse(BaseModel):
     id: int
     user_id: int
-    loan_id: int = None
-    status: TransactionStatus
-    date_time: datetime
+    loan_id: int
+    transaction_type: str
+    amount: float
+    amount_from: float
+    currency: str
+    account_number: str
+    status: str
+    date_time: str
+    payment_date: str
+    returned_payment: float
+    interest_payed: float
+    period: int
+    remarks: Optional[str]
 
     class Config:
-        from_attributes = True
+        from_attributes= True

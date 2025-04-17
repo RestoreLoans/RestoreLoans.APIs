@@ -1,4 +1,5 @@
 from pydantic import BaseModel, field_validator
+from typing import Optional
 from enum import Enum
 from datetime import date, datetime
 
@@ -12,7 +13,7 @@ class DocumentBase(BaseModel):
     file_name: str  # Added file_name to match the JSON
     file_path: str
     file_size: int
-    remarks: str = None
+    remarks: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -20,7 +21,7 @@ class DocumentCreate(DocumentBase):
 class DocumentResponse(DocumentBase):
     id: int
     user_id: int
-    loan_id: int = None
+    loan_id: Optional[int] = None
     status: DocumentStatus
     upload_date: date
 
@@ -32,3 +33,8 @@ class DocumentResponse(DocumentBase):
 
     class Config:
         from_attributes = True
+
+class DocumentUpdate(BaseModel):
+    document_name: Optional[str] = None
+    document_status: Optional[str] = None
+    remarks: Optional[str] = None

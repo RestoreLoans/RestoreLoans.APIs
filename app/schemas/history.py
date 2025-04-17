@@ -1,19 +1,22 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
 
-class StatementHistoryBase(BaseModel):
+class StatementHistoryCreate(BaseModel):
     user_id: int
-    loan_id: Optional[int]  # Loan ID is optional
-    statement_type: str  # 'application' or 'financial'
+    loan_id: int
+    statement_type: str
     file_path: str
 
-class StatementHistoryCreate(StatementHistoryBase):
-    pass  # Inherits all fields from StatementHistoryBase for creation
-
-class StatementHistoryResponse(StatementHistoryBase):
+class StatementHistoryResponse(BaseModel):
     id: int
-    statement_date: datetime  # Automatically set by the database
+    user_id: int
+    loan_id: int
+    statement_type: str
+    file_path: str
 
     class Config:
         from_attributes= True
+
+class StatementHistoryUpdate(BaseModel):
+    statement_type: Optional[str] = None
+    file_path: Optional[str] = None

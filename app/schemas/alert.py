@@ -17,18 +17,24 @@ class AlertStatus(str, Enum):
     active = "active"
     dismissed = "dismissed"
 
-class AlertBase(BaseModel):
-    alert_type: AlertType
-    message: str
-    priority: PriorityLevel
-    action_required: bool
-    remarks: str = None
+class AlertCreate(BaseModel):
+    title: str
+    description: str
+    is_active: bool
 
-class AlertResponse(AlertBase):
+class AlertUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
+class AlertResponse(BaseModel):
     id: int
     user_id: int
+    title: str
+    description: str
+    is_active: bool
     status: AlertStatus
     date_time: datetime
 
     class Config:
-        from_attributes = True
+        from_attributes= True
