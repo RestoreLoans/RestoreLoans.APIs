@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models.user import User
 from app.schemas.sms import SMSResponse, SMSCreate, SMSUpdate
 from app.models.sms import SMS  # Assuming SMS is the SQLAlchemy model for SMS records
 
@@ -9,14 +10,31 @@ router = APIRouter(
     tags=["SMS"]
 )
 
-@router.get("/", response_model=list[SMSResponse])
-def get_sms(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    # Query SMS
-    sms_records = db.query(SMS).offset(skip).limit(limit).all()
+@router.post("/", response_model=SMSResponse, status_code=status.HTTP_201_CREATED)
+def create_sms(sms: SMSCreate, db: Session = Depends(get_db)):
+    # --- START VALIDATION ---
+    # Check if the user_id provided in the request exists in the users table
+    user = db.query(User).filter(User.id == sms.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, # Or 400 Bad Request
+            detail=f"User with ID {sms.user_id} not found."
+        )
+     # --- END VALIDATION ---
 
-    # Return the list of SMS records
-    return sms_records
-
+    # If user exists, proceed to create the SMS record
+    new_sms = SMS(**sms.model_dump())
+    db.add(new_sms)
+    try:
+        db.commit()
+        db.refresh(new_sms)
+    except Exception as e: # Catch potential commit errors (though FK should be caught by check now)
+         db.rollback()
+         raise HTTPException(
+             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+             detail=f"Failed to create SMS record: {e}"
+         )
+    return new_sms
 
 @router.get("/{sms_id}", response_model=SMSResponse)
 def get_sms_by_id(sms_id: int, db: Session = Depends(get_db)):
@@ -29,14 +47,13 @@ def get_sms_by_id(sms_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=SMSResponse, status_code=status.HTTP_201_CREATED)
 def create_sms(sms: SMSCreate, db: Session = Depends(get_db)):
-    # Create a new SMS record
-    new_sms = SMS(**sms.model_dump())
+    # sms (type SMSCreate) doesn't have user_id
+    new_sms = SMS(**sms.model_dump()) # So user_id becomes None here
     db.add(new_sms)
-    db.commit()
+    db.commit() # <-- Error happens here
     db.refresh(new_sms)
-
-    # Return the created SMS record
     return new_sms
+
 
 
 @router.put("/{sms_id}", response_model=SMSResponse)
