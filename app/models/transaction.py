@@ -12,7 +12,7 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # Foreign key to users table
     loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
     transaction_type = Column(String)
-    amount = Column(Float)
+    amount = Column(Float, nullable=True)
     credit = Column(Float)
     debit = Column(Float)
     balance = Column(Float)
