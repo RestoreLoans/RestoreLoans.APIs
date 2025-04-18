@@ -12,16 +12,15 @@ router = APIRouter(
 # Create a new transaction
 @router.post("/", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db)):
-    new_transaction = Transaction(**transaction.dict())
+    new_transaction = Transaction(**transaction.model_dump())
     db.add(new_transaction)
     db.commit()
     db.refresh(new_transaction)
     return new_transaction
 
 # Read all transactions
-@router.get("/transactions/")
+@router.get("/", response_model=list[TransactionResponse])
 def get_transactions(db: Session = Depends(get_db)):
-    # Ensure the query does not reference `amount_to`
     transactions = db.query(Transaction).all()
     return transactions
 
@@ -39,7 +38,7 @@ def update_transaction(transaction_id: int, transaction_update: TransactionUpdat
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not transaction:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
-    for key, value in transaction_update.dict(exclude_unset=True).items():
+    for key, value in transaction_update.model_dump(exclude_unset=True).items():
         setattr(transaction, key, value)
     db.commit()
     db.refresh(transaction)

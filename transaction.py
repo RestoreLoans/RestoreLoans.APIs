@@ -1,15 +1,12 @@
-
-from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
-from app.models.user import User  # Import User model
-from app.models.loan import Loan  # Import Loan model
 
 class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # Foreign key to users table
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
     transaction_type = Column(String)
     amount = Column(Float)
@@ -26,6 +23,6 @@ class Transaction(Base):
     period = Column(Integer)
     remarks = Column(String)
 
-    # Relationships
-    user = relationship('User', back_populates='transactions') # Add this relationship
+    # Relationships - using string reference instead of direct import
+    user = relationship('User', back_populates='transactions')
     loan = relationship("Loan", back_populates="transactions")

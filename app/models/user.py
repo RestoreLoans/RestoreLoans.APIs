@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, Date, Enum
 from sqlalchemy.sql.sqltypes import TIMESTAMP,DateTime
 from sqlalchemy.sql.expression import text
 from app.database import Base
+from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
 
@@ -23,3 +24,5 @@ class User(Base):
     password = Column(String, nullable=False)
     is_active = Column(Boolean, server_default='TRUE', nullable=False)
     created_at = Column(Date, nullable=False, default=datetime.utcnow().date)
+      # Define the relationship
+    transactions = relationship("Transaction", back_populates="user")
