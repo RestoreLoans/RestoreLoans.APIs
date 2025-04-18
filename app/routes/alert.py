@@ -53,3 +53,35 @@ def delete_alert(alert_id: int, db: Session = Depends(get_db)):
     db.delete(alert)
     db.commit()
     return
+# In app/routes/alert.py
+@router.post("/", response_model=AlertResponse, status_code=status.HTTP_201_CREATED)
+def create_alert(alert: AlertCreate, db: Session = Depends(get_db)):
+    # Use model_dump() for Pydantic v2+
+    new_alert = Alert(**alert.model_dump(exclude_unset=True))
+    db.add(new_alert)
+    try:
+        db.commit()
+        db.refresh(new_alert)
+    except Exception as e:
+        db.rollback()
+        # Consider logging the error e
+        raise HTTPException(status_code=500, detail="Failed to create alert.")
+    return new_alert
+
+# Also update the update route to use model_dump()
+@router.put("/{alert_id}", response_model=AlertResponse)
+def update_alert(alert_id: int, alert_data: AlertUpdate, db: Session = Depends(get_db)):
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    # Use model_dump() for Pydantic v2+
+    for key, value in alert_data.model_dump(exclude_unset=True).items():
+        setattr(alert, key, value)
+    try:
+        db.commit()
+        db.refresh(alert)
+    except Exception as e:
+        db.rollback()
+        # Consider logging the error e
+        raise HTTPException(status_code=500, detail="Failed to update alert.")
+    return alert

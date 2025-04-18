@@ -21,13 +21,17 @@ class AlertStatus(str, enum.Enum):
 
 class Alert(Base):
     __tablename__ = "alerts"
-
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, nullable=False) # Auto-incrementing PK
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     alert_type = Column(Enum(AlertType), nullable=False)
     message = Column(String, nullable=False)
-    date_time = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
+    date_time = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()')) # Has server default
     priority = Column(Enum(PriorityLevel), nullable=False)
     status = Column(Enum(AlertStatus), server_default="active", nullable=False)
     action_required = Column(Boolean, server_default='TRUE', nullable=False)
     remarks = Column(String, nullable=True)
+    is_active = Column(Boolean, server_default='TRUE', nullable=False)
+    is_read = Column(Boolean, server_default='FALSE', nullable=False)
+    is_deleted = Column(Boolean, server_default='FALSE', nullable=False)
+    title = Column(String, nullable=False) # <-- Defined here
+    description = Column(String, nullable=False) # <-- Also defined here
