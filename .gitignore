@@ -32,3 +32,6 @@ app/*.env
 
 # macOS
 .DS_Store
+.venv
+.python-version
+.python
