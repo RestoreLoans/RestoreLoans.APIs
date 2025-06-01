@@ -11,7 +11,7 @@ class userRole(Base):
     __tablename__ = "user_roles"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    role_name = Column(String, nullable=False, unique=True)
-    description = Column(String, nullable=True)
+    role_name = Column(String(200), nullable=False, unique=True)
+    description = Column(String(200), nullable=True)
     status = Column(Enum(RoleStatus), nullable=False, server_default=RoleStatus.active.value)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))

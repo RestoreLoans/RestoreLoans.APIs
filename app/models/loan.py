@@ -24,7 +24,7 @@ class Loan(Base):
     loan_amount = Column(Float, nullable=False)
     interest_rate = Column(Float, nullable=False)
     loan_term = Column(Integer, nullable=False)  # in months
-    loan_type = Column(String)
+    loan_type = Column(String(200))
     monthly_installment = Column(Float, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)

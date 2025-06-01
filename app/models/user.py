@@ -15,14 +15,14 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    id_number = Column(String, nullable=False, unique=True)
-    email = Column(String, nullable=False, unique=True)
-    phone_number = Column(String, nullable=False, unique=True)
+    first_name = Column(String(200), nullable=False)
+    last_name = Column(String(200), nullable=False)
+    id_number = Column(String(200), nullable=False, unique=True)
+    email = Column(String(200), nullable=False, unique=True)
+    phone_number = Column(String(200), nullable=False, unique=True)
     gender = Column(Enum(Gender), nullable=False)
-    password = Column(String, nullable=False)
-    is_active = Column(Boolean, server_default='TRUE', nullable=False)
+    password = Column(String(200), nullable=False)
+    is_active = Column(Boolean, server_default=text("1"), nullable=False)
     created_at = Column(Date, nullable=False, default=datetime.utcnow().date)
       # Define the relationship
     transactions = relationship("Transaction", back_populates="user")

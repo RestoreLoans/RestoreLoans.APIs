@@ -11,20 +11,20 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # Foreign key to users table
     loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
-    transaction_type = Column(String)
+    transaction_type = Column(String(200))
     amount = Column(Float, nullable=True)
     credit = Column(Float)
     debit = Column(Float)
     balance = Column(Float)
-    currency = Column(String)
-    account_number = Column(String)
-    status = Column(String)
+    currency = Column(String(200))
+    account_number = Column(String(200))
+    status = Column(String(200))
     date_time = Column(DateTime)
     payment_date = Column(DateTime)
     returned_payment = Column(Float)
     interest_payed = Column(Float)
     period = Column(Integer)
-    remarks = Column(String)
+    remarks = Column(String(200))
 
     # Relationships
     user = relationship('User', back_populates='transactions') # Add this relationship

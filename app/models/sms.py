@@ -14,9 +14,9 @@ class SMS(Base):
 
     id = Column(Integer, primary_key=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    sender = Column(String, nullable=False)
-    recipient = Column(String, nullable=False)
-    message = Column(String, nullable=False)
+    sender = Column(String(200), nullable=False)
+    recipient = Column(String(200), nullable=False)
+    message = Column(String(200), nullable=False)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     status = Column(Enum(DeliveryStatus), server_default="sent", nullable=False)
-    remarks = Column(String, nullable=True)
+    remarks = Column(String(200), nullable=True)

@@ -25,6 +25,7 @@ docs.zip
 archive.zip
 .env
 app/*.env
+app/.env
 # vim temporary files
 *~
 .*.sw?
