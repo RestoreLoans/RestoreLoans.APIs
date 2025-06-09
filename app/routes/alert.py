@@ -4,6 +4,9 @@ from app.database import get_db
 from app.schemas.alert import AlertResponse, AlertCreate, AlertUpdate
 from app.models.alert import Alert  # Assuming Alert is the SQLAlchemy model for alerts
 
+
+
+
 router = APIRouter(
     prefix="/alerts",
     tags=["Alerts"]
