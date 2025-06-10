@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest # Use the latest Ubuntu runner provided by GitHub Actions
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Deploy to Afrihost via SFTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.0 
@@ -20,8 +22,14 @@ jobs:
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: ${{ secrets.SFTP_PORT }} # Optional: only if not default 22
-          local-dir: ./app/ # The local directory containing your built React app files
+          local-dir: ./ # The local directory containing your built React app files
           remote-dir: /api/ # The remote directory on your Afrihost server
+          exclude: |
+            **/.git*
+            **/.github*
+            **/venv/*
+            **/__pycache__/*
+            **/*.pyc
           # The 'local-dir: ./build/' combined with 'remote-dir: /public_html/'
           # means the *contents* of your local 'build' folder will be placed directly
           # into the remote '/public_html/' folder. This ensures your index.html
