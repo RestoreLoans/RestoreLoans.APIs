@@ -59,6 +59,8 @@ class AuthService:
 
         return db_user
 
+
+
     @staticmethod
     def login_user(db: Session, user_data: OAuth2PasswordRequestForm):
         user = db.query(User).filter(User.email == user_data.username).first()
