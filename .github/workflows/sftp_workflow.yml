@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: ${{ secrets.SFTP_PORT }} # Optional: only if not default 22
-          local-dir: ./app # The local directory containing your built React app files
+          local-dir: ./app/ # The local directory containing your built React app files
           remote-dir: /api/ # The remote directory on your Afrihost server
           # The 'local-dir: ./build/' combined with 'remote-dir: /public_html/'
           # means the *contents* of your local 'build' folder will be placed directly
