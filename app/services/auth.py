@@ -10,13 +10,19 @@ from ..models.user import User
 from ..schemas.user import UserCreate, UserResponse
 from ..utils.security import create_access_token, verify_password, get_password_hash
 import random
+import hashlib
 import string
+from app.schemas.user import UserResponse
+from app.schemas.userRoles import UserRoleResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
     @staticmethod
+    def some_method():
+        pass  # Replace with actual implementation or remove if unnecessary
+
     def register_user(db: Session, user_data: UserCreate):
         # Check if email already exists
         db_user = db.query(User).filter(User.email == user_data.email).first()
@@ -64,7 +70,7 @@ class AuthService:
             )
 
         access_token = create_access_token(data={"sub": user.email})
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {"access_token": access_token, "token_type": "bearer","user": user}
 
     @staticmethod
     def forgot_password(db: Session, email: str):
@@ -89,3 +95,18 @@ class AuthService:
         if len(otp) != 6 or not otp.isdigit():
             raise HTTPException(status_code=400, detail="Invalid OTP format")
         return {"message": "OTP verified successfully"}
+
+    @staticmethod
+    def user_roles(db: Session, user_id: int):
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        roles = db.query(UserRoleResponse).filter(UserRoleResponse.user_id == user_id).all()
+        return {"user": UserResponse.from_orm(user), "roles": roles}
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        # Hash the password using SHA-256
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    

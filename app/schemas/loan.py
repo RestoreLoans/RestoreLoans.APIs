@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 
 class LoanType(str, Enum):
@@ -22,13 +22,13 @@ class LoanBase(BaseModel):
     end_date: date
 
 class LoanCreate(LoanBase):
-    pass
+    user_id: int  # The ID of the user associated with the loan
 
 class LoanResponse(LoanBase):
     id: int
     user_id: int
     status: LoanStatus
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
