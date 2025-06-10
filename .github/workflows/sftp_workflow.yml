@@ -28,6 +28,7 @@ jobs:
             **/.git*
             **/.github*
             **/venv/*
+            **/.venv/*
             **/__pycache__/*
             **/*.pyc
           # The 'local-dir: ./build/' combined with 'remote-dir: /public_html/'
