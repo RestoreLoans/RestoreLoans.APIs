@@ -33,3 +33,4 @@ jobs:
                               # set this to `false` or manually manage them.
           state-name: .ftp-deploy-state.json # Stores deployment state to optimize future deployments
           log-level: verbose # Provides detailed logs for debugging
+          
