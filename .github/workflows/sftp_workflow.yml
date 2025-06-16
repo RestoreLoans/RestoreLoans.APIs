@@ -15,31 +15,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Deploy to Afrihost via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.0 
-        with:
+      - name: Install SSH Client
+        run: sudo apt-get install -y openssh-client
+    
+      - name: Upload files via SFTP
+        env:
           server: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
-          port: ${{ secrets.SFTP_PORT }} # Optional: only if not default 22
-          local-dir: ./ # The local directory containing your built React app files
-          remote-dir: / # The remote directory on your Afrihost server
-          exclude: |
-            **/.git*
-            **/.github*
-            **/venv/*
-            **/.venv/*
-            **/__pycache__/*
-            **/*.pyc
-          # The 'local-dir: ./build/' combined with 'remote-dir: /public_html/'
-          # means the *contents* of your local 'build' folder will be placed directly
-          # into the remote '/public_html/' folder. This ensures your index.html
-          # is accessible at your domain's root.
-          delete-remote: true # Optional: Deletes files on the remote server that are not in the local-dir.
-                              # Use with caution! This ensures a clean deployment but can remove
-                              # other files in public_html if they are not part of your build.
-                              # If you have other files in public_html that are NOT part of your build,
-                              # set this to `false` or manually manage them.
-          state-name: .ftp-deploy-state.json # Stores deployment state to optimize future deployments
-          log-level: verbose # Provides detailed logs for debugging
-          
+          port: ${{ secrets.SFTP_PORT }}
+        run: |
+          sudo apt-get install -y lftp
+          lftp -u "$SFTP_USERNAME","$SFTP_PASSWORD" sftp://$SFTP_HOST:$SFTP_PORT <<EOF
+          mirror -R ./dist $SFTP_TARGET
+          bye
+          EOF
+
