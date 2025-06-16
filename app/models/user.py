@@ -22,7 +22,7 @@ class User(Base):
     phone_number = Column(String(200), nullable=False, unique=True)
     gender = Column(Enum(Gender), nullable=False)
     password = Column(String(200), nullable=False)
-    is_active = Column(Boolean, server_default=text("1"), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(Date, nullable=False, default=datetime.utcnow().date)
       # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
