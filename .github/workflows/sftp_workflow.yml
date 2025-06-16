@@ -23,7 +23,7 @@ jobs:
           password: ${{ secrets.SFTP_PASSWORD }}
           port: ${{ secrets.SFTP_PORT }} # Optional: only if not default 22
           local-dir: ./ # The local directory containing your built React app files
-          remote-dir: /api/ # The remote directory on your Afrihost server
+          remote-dir: / # The remote directory on your Afrihost server
           exclude: |
             **/.git*
             **/.github*
