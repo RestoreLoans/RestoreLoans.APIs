@@ -15,19 +15,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install SSH Client
-        run: sudo apt-get install -y openssh-client
-    
-      - name: Upload files via SFTP
-        env:
+
+      - name: SFTP upload
+        uses: Dylan700/sftp-upload-action@latest
+        with:
           server: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: ${{ secrets.SFTP_PORT }}
-        run: |
-          sudo apt-get install -y lftp
-          lftp -u "$SFTP_USERNAME","$SFTP_PASSWORD" sftp://$SFTP_HOST:$SFTP_PORT <<EOF
-          mirror -R ./ /
-          bye
-          EOF
+          uploads: | 
+            ./ => ./
 
