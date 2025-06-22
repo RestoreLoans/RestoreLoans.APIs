@@ -12,25 +12,17 @@ jobs:
     runs-on: ubuntu-latest # Use the latest Ubuntu runner provided by GitHub Actions
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Deploy to Afrihost via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.0 
+
+      - name: SFTP upload
+        uses: Dylan700/sftp-upload-action@latest
         with:
           server: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
-          port: ${{ secrets.SFTP_PORT }} # Optional: only if not default 22
-          local-dir: ./ # The local directory containing your built React app files
-          remote-dir: /api/ # The remote directory on your Afrihost server
-          # The 'local-dir: ./build/' combined with 'remote-dir: /public_html/'
-          # means the *contents* of your local 'build' folder will be placed directly
-          # into the remote '/public_html/' folder. This ensures your index.html
-          # is accessible at your domain's root.
-          delete-remote: true # Optional: Deletes files on the remote server that are not in the local-dir.
-                              # Use with caution! This ensures a clean deployment but can remove
-                              # other files in public_html if they are not part of your build.
-                              # If you have other files in public_html that are NOT part of your build,
-                              # set this to `false` or manually manage them.
-          state-name: .ftp-deploy-state.json # Stores deployment state to optimize future deployments
-          log-level: verbose # Provides detailed logs for debugging
-          
+          port: ${{ secrets.SFTP_PORT }}
+          uploads: | 
+            ./ => ./
+

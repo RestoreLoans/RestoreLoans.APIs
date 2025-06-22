@@ -59,6 +59,8 @@ class AuthService:
 
         return db_user
 
+
+
     @staticmethod
     def login_user(db: Session, user_data: OAuth2PasswordRequestForm):
         user = db.query(User).filter(User.email == user_data.username).first()
@@ -68,6 +70,7 @@ class AuthService:
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+            
 
         access_token = create_access_token(data={"sub": user.email})
         return {"access_token": access_token, "token_type": "bearer","user": user}
