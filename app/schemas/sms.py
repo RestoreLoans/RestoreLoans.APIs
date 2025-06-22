@@ -29,4 +29,4 @@ class SMSResponse(BaseModel):
     remarks: Optional[str] = None
 
     class Config:
-        from_attributes = True # or orm_mode = True for Pydantic v1
+        from_attributes = True # or from_attributes = True for Pydantic v1
