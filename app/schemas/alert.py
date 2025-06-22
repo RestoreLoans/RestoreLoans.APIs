@@ -72,4 +72,4 @@ class AlertResponse(BaseModel):
     # Remove created_at/updated_at unless you add them to the model
 
     class Config:
-        from_attributes = True # or orm_mode = True for Pydantic v1
+        from_attributes = True # or from_attributes = True for Pydantic v1
