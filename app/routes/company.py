@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
-from app.models.company import Company
-from app.schemas.company import CompanyCreate, CompanyResponse
+from app.models.company import Company  # Ensure this matches the provided Company model
+from app.schemas.company import CompanyCreate, CompanyResponse  # Ensure these schemas match the Company model fields
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -48,7 +48,8 @@ def update_company(company_id: int, company_update: CompanyCreate, db: Session =
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     for key, value in company_update.model_dump().items():
-        setattr(company, key, value)
+        if hasattr(company, key):
+            setattr(company, key, value)
     try:
         db.commit()
         db.refresh(company)
@@ -56,7 +57,7 @@ def update_company(company_id: int, company_update: CompanyCreate, db: Session =
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A company with this email already exists."
+            detail="A company with this email or name already exists."
         )
     except Exception:
         db.rollback()
