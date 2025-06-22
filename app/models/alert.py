@@ -28,10 +28,10 @@ class Alert(Base):
     date_time = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()')) # Has server default
     priority = Column(Enum(PriorityLevel), nullable=False)
     status = Column(Enum(AlertStatus), server_default="active", nullable=False)
-    action_required = Column(Boolean, server_default=text("1"), nullable=False)
+    action_required = Column(Boolean,default=False, nullable=False)
     remarks = Column(String(200), nullable=True)
-    is_active = Column(Boolean, server_default=text("1"), nullable=False)
-    is_read = Column(Boolean, server_default=text("0"), nullable=False)
-    is_deleted = Column(Boolean, server_default=text("0"), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_read = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=True, nullable=False)
     title = Column(String(200), nullable=False) # <-- Defined here
     description = Column(String(200), nullable=False) # <-- Also defined here
