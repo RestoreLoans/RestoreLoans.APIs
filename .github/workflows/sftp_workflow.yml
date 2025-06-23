@@ -27,5 +27,5 @@ jobs:
             ./ => ./
       - name: Create and activate virtualenv
         run: |
-              source /root/venv/bin/activate pip install -r requirements.txt
+            sudo  source /root/venv/bin/activate pip install -r requirements.txt
 
