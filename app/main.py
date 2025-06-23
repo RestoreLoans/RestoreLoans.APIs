@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.routes import auth, user, userRoles, loan, bank, document, history, alert, sms, transaction, company
 from app.database import engine, Base
 from fastapi.middleware.cors import CORSMiddleware
+import app.models
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="RestoreLoans API", version="1.0.0")
