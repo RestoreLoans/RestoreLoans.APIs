@@ -25,7 +25,9 @@ jobs:
           port: ${{ secrets.SFTP_PORT }}
           uploads: | 
             ./ => ./
-      - name: Create and activate virtualenv
+      - name: Install requirements in venv
         run: |
-            sudo  source /root/venv/bin/activate pip install -r requirements.txt
+            python -m venv venv
+            ./venv/bin/pip install --upgrade pip
+            ./venv/bin/pip install -r requirements.txt
 
