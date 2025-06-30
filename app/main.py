@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import app.models
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="RestoreLoans API", version="1.0.0")
+app = FastAPI(title="RestoreLoans API2", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins (⚠️ Not safe for production)
