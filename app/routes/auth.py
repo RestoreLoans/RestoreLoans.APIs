@@ -16,7 +16,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return AuthService.register_user(db, user_data)
 
 @router.post("/login")
-def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
     return AuthService.login_user(db, user_data)
 
 @router.post("/forgot-password")
