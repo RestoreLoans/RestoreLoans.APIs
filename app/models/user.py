@@ -22,9 +22,9 @@ class User(Base):
     password = Column(String(200), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(Date, nullable=False, default=datetime.utcnow().date)
-      # Define the relationship
+    # Define the relationship
     created_at = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"))
     company = relationship("Company", back_populates="users")
