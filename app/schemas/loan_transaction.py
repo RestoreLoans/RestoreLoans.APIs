@@ -8,6 +8,7 @@ class LoanTransactionBase(BaseModel):
     user_id: int
     borrower: str
     loan_amount: float
+    account_no: str  # <-- Added field
 
 
 class LoanTransactionCreate(LoanTransactionBase):

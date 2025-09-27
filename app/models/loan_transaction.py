@@ -10,6 +10,7 @@ class LoanTransaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     borrower = Column(String, nullable=False)
     loan_amount = Column(Float, nullable=False)
+    account_no = Column(String, nullable=False)  # <-- Added field
     status_approval = Column(String, default="Pending")  # Pending, Approved,
     # Declined
     # Add other fields as neededing, default="Pending")  # Pending, Approved, Declined
