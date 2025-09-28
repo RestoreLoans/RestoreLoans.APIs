@@ -3,7 +3,6 @@ from typing import Optional
 from datetime import date
 from app.models.user import Gender
 
-
 class UserBase(BaseModel):
     first_name: str
     last_name: str
@@ -13,10 +12,8 @@ class UserBase(BaseModel):
     gender: Gender
     is_active: bool
 
-
 class UserCreate(UserBase):
     password: str  # Password is required when creating a user
-
 
 class UserResponse(UserBase):
     id: int
@@ -25,26 +22,21 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
-
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-
 class UserOTP(BaseModel):
     email: EmailStr
     otp: str
-
 
 class UserForgotPassword(BaseModel):
     email: EmailStr
     new_password: str
     confirm_password: str
 
-
 class UserForgotUsername(BaseModel):
     email: EmailStr
-
 
 class UserUpdate(BaseModel):
     first_name: Optional[str]
@@ -56,4 +48,4 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool]
 
     class Config:
-        from_attributes = True
+        from_attributes= True
