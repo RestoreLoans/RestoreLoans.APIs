@@ -4,12 +4,10 @@ from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime, timezone
 
-
 class Gender(str, enum.Enum):
     male = "male"
     female = "female"
     other = "other"
-
 
 class User(Base):
     __tablename__ = "users"
@@ -20,8 +18,13 @@ class User(Base):
     id_number = Column(String(200), nullable=False, unique=True)
     email = Column(String(200), nullable=False, unique=True)
     phone_number = Column(String(200), nullable=False, unique=True)
+    gender = Column(Enum(Gender), nullable=False)
+    password = Column(String(200), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(Date, nullable=False, default=datetime.utcnow().date)
+    # Define the relationship
+    created_at = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
     company_id = Column(Integer, ForeignKey("companies.id"))
     company = relationship("Company", back_populates="users")

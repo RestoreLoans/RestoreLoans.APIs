@@ -10,7 +10,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="RestoreLoans API2", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (⚠️ Not safe for production)
+    allow_origins=["*"],  # Or specify your frontend's URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
