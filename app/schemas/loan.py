@@ -20,6 +20,9 @@ class LoanBase(BaseModel):
     monthly_installment: float
     start_date: date
     end_date: date
+    id_path: str
+    bank_path: str
+    proof_of_residence_path: str
 
 class LoanCreate(LoanBase):
     user_id: int  # The ID of the user associated with the loan

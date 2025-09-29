@@ -7,6 +7,10 @@ class CompanyBase(BaseModel):
     address: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    user_id: int
+
+
+
 
 class CompanyCreate(CompanyBase):
     name: str
@@ -19,6 +23,8 @@ class CompanyResponse(CompanyBase):
     phone: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    user_id: int
+
 
     class Config:
         from_attributes = True

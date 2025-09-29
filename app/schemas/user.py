@@ -11,6 +11,12 @@ class UserBase(BaseModel):
     phone_number: str
     gender: Gender
     is_active: bool
+    company_id: Optional[int] = None
+    class Config:
+        orm_mode = True
+    
+
+
 
 class UserCreate(UserBase):
     password: str  # Password is required when creating a user

@@ -22,8 +22,8 @@ class Loan(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     loan_type = Column(Enum(LoanType), nullable=False)
     loan_amount = Column(Float, nullable=False)
-    interest_rate = Column(Float, nullable=False)
-    loan_term = Column(Integer, nullable=False)  # in months
+    interest_rate = Column(Float, nullable=True)
+    loan_term = Column(Integer, nullable=True)  # in months
     loan_type = Column(String(200))
     monthly_installment = Column(Float, nullable=False)
     start_date = Column(Date, nullable=False)
@@ -31,4 +31,7 @@ class Loan(Base):
     status = Column(Enum(LoanStatus), server_default="active", nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     transactions = relationship("Transaction", back_populates="loan")
+    id_path = Column(String(900))
+    bank_path = Column(String(900))
+    proof_of_residence_path = Column(String(900))
    

@@ -23,12 +23,13 @@ jobs:
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: ${{ secrets.SFTP_PORT }}
-          uploads: | 
+          uploads: |
             ./ => ./
       - name: Install requirements in venv
         run: |
             python -m venv venv
             ./venv/bin/pip install --upgrade pip
             ./venv/bin/pip install -r requirements.txt
+
 
  
