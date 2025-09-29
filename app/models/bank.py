@@ -4,10 +4,12 @@ from sqlalchemy.sql.expression import text
 from app.database import Base
 import enum
 
+
 class AccountType(str, enum.Enum):
     savings = "savings"
     current = "current"
     cheque = "cheque"
+
 
 class BankDetail(Base):
     __tablename__ = "bank_details"
