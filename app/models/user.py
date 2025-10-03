@@ -26,5 +26,11 @@ class User(Base):
     created_at = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
-    company_id = Column(Integer, ForeignKey("companies.id"))
-    company = relationship("Company", back_populates="users")
+    company_id = Column(Integer, ForeignKey("companies.id",ondelete="SET NULL"), nullable=True)
+    company = relationship(
+        "Company",
+     
+        foreign_keys=[company_id] ,  # 👈 specify explicitly
+        passive_deletes=True   # ✅ important
+    )
+    

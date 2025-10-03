@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models.company import Company  # Ensure this matches the provided Company model
+from app.models.user import User 
 from app.schemas.company import CompanyCreate, CompanyResponse  # Ensure these schemas match the Company model fields
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -11,17 +12,21 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 @router.post("/", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
 def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
     company_data = company.model_dump()
+    company_data.pop("user_id", None)
     new_company = Company(**company_data)
     db.add(new_company)
+    db.commit()
+    db.refresh(new_company)
     try:
-        db.commit()
-        db.refresh(new_company)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A company with this email already exists."
-        )
+     
+
+        user = db.query(User).filter(User.id == company.user_id).first()
+        if user:
+            user.company_id = new_company.id
+            db.commit()
+            db.refresh(user)
+     
+
     except Exception:
         db.rollback()
         raise HTTPException(

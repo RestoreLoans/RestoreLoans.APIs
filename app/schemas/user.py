@@ -24,6 +24,8 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: int
     created_at: date
+    company_id: Optional[int] = None
+
 
     class Config:
         from_attributes = True

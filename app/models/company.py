@@ -7,11 +7,10 @@ class Company(Base):
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String,  nullable=False)
     address = Column(String, nullable=True)
-    email = Column(String, unique=True, nullable=True)
+    email = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    users = relationship("User", back_populates="company")
+ 

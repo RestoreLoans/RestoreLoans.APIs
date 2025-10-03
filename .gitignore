@@ -19,6 +19,7 @@ env3.*
 .git/
 utils/*.json
 utils/storage-service-account.json
+utils/google.json
 docs_build
 site_build
 venv

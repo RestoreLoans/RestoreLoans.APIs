@@ -7,7 +7,7 @@ class CompanyBase(BaseModel):
     address: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    user_id: int
+    user_id: Optional[str] = None
 
 
 
@@ -15,6 +15,10 @@ class CompanyBase(BaseModel):
 class CompanyCreate(CompanyBase):
     name: str
     email: EmailStr
+    address: str
+    phone: str
+    user_id: int
+
 
 class CompanyResponse(CompanyBase):
     id: int
@@ -23,7 +27,11 @@ class CompanyResponse(CompanyBase):
     phone: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    user_id: int
+
+    class Config:
+        orm_mode = True
+   
+
 
 
     class Config:

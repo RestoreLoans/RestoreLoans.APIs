@@ -73,9 +73,9 @@ def get_loan(loan_id: int, db: Session = Depends(get_db)):
             detail=f"Loan with ID {loan_id} does not exist."
         )
     return loan
-@router.get("/{user_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
+@router.get("/by-user-id/{user_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
 def get_loan_by_user(user_id: int, db: Session = Depends(get_db)):
-    loan = db.query(Loan).filter(Loan.user_id == user_id).all()
+    loan = db.query(Loan).filter(Loan.user_id == user_id).first()
     if not loan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
