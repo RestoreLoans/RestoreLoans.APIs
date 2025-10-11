@@ -15,7 +15,7 @@ class BankDetail(Base):
     __tablename__ = "bank_details"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
     bank_name = Column(String(200), nullable=False)
     branch_name = Column(String(200), nullable=False)
     branch_code = Column(String(200), nullable=False)

@@ -17,11 +17,10 @@ class BankDetailBase(BaseModel):
     account_type: AccountType
 
 class BankDetailCreate(BankDetailBase):
-    user_id: int  # The ID of the user associated with the bank detail
+    user_id: Optional[int] = None  # The ID of the user associated with the bank detail
 
 class BankDetailResponse(BankDetailBase):
     id: int
-    user_id: int
     created_at: datetime
     updated_at: datetime
 

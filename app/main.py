@@ -5,7 +5,9 @@ from app.database import engine, Base
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import loan_transaction
 import app.models as models
-Base.metadata.create_all(bind=engine)
+#Base.metadata.drop_all(bind=engine)   # Deletes all tables
+Base.metadata.create_all(bind=engine) # Recreates all tables with new fields
+
 
 app = FastAPI(title="RestoreLoans API2", version="1.0.0")
 app.add_middleware(
