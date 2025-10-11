@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+from app.models.user import User
 from ..database import get_db
 from ..models.bank import BankDetail
 from app.schemas.bank import BankDetailCreate, BankDetailResponse, BankDetailUpdate
@@ -20,7 +22,7 @@ def create_bank_detail(bank_data: BankDetailCreate, db: Session = Depends(get_db
         )
 
     new_bank_detail = BankDetail(
-        user_id=bank_data.user_id,
+
         bank_name=bank_data.bank_name,
         branch_name=bank_data.branch_name,
         branch_code=bank_data.branch_code,
@@ -32,6 +34,11 @@ def create_bank_detail(bank_data: BankDetailCreate, db: Session = Depends(get_db
     db.add(new_bank_detail)
     db.commit()
     db.refresh(new_bank_detail)
+    user = db.query(User).filter(User.id == bank_data.user_id).first()
+    if user:
+        user.bank_id = new_bank_detail.id
+        db.commit()
+        db.refresh(user)
 
     return new_bank_detail
 

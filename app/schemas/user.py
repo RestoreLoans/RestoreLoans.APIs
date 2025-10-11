@@ -12,6 +12,8 @@ class UserBase(BaseModel):
     gender: Gender
     is_active: bool
     company_id: Optional[int] = None
+    bank_id: Optional[int] = None
+
     class Config:
         orm_mode = True
     

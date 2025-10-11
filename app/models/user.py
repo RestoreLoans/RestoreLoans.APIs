@@ -33,4 +33,11 @@ class User(Base):
         foreign_keys=[company_id] ,  # 👈 specify explicitly
         passive_deletes=True   # ✅ important
     )
+    bank_id = Column(Integer, ForeignKey("bank_details.id",ondelete="SET NULL"), nullable=True)
+    bank = relationship(
+        "BankDetail",
+     
+        foreign_keys=[bank_id] ,  # 👈 specify explicitly
+        passive_deletes=True   # ✅ important
+    )
     
