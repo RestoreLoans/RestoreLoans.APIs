@@ -15,7 +15,7 @@ class UserBase(BaseModel):
     bank_id: Optional[int] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
     
 
 
