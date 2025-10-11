@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 
 class LoanType(str, Enum):
     home = "home"
@@ -32,6 +33,9 @@ class LoanResponse(LoanBase):
     user_id: int
     status: LoanStatus
     created_at: datetime
+    id_path: Optional[str] = None
+    bank_path: Optional[str] = None
+    proof_of_residence_path: Optional[str] = None
 
     class Config:
         from_attributes = True
