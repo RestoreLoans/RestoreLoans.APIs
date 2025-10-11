@@ -42,6 +42,13 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
         )
     return new_company
 
+@router.get("/by-user/{user_id}", response_model=list[CompanyResponse])
+def get_companies_by_user(user_id: int, db: Session = Depends(get_db)):
+    companies = db.query(Company).filter(Company.user_id == user_id).all()
+    if not companies:
+        raise HTTPException(status_code=404, detail="No companies found for this user")
+    return companies
+
 @router.get("/", response_model=list[CompanyResponse])
 def read_companies(
     skip: int = 0,
