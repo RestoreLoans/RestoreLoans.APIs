@@ -72,6 +72,32 @@ def read_loan_transaction(
         )
     return transaction
 
+@router.patch(
+    "/{transaction_id}/status",
+    response_model=LoanTransactionResponse
+)
+def update_loan_transaction_status(
+    transaction_id: int,
+    status: LoanTransactionUpdateStatus,
+    db: Session = Depends(get_db)
+):
+    transaction = db.query(LoanTransaction).filter(
+        LoanTransaction.id == transaction_id
+    ).first()
+    if not transaction:
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found"
+        )
+
+    transaction.status_approval = status.status_approval
+    if status.status_approval == "Approved":
+        transaction.date_approved = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(transaction)
+    return transaction
+
 
 
 @router.delete(
