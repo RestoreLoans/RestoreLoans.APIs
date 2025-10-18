@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.company import Company
 from app.schemas.company import CompanyResponse
+from app.schemas.email import SendLoanEmailRequest
+from app.services.email_service import email_service  # Change from 'email' to 'email_service'
+
 
 from app.schemas.loan_transaction import (
     LoanTransactionCreate,
@@ -11,6 +14,7 @@ from app.schemas.loan_transaction import (
 )
 from app.models.loan_transaction import LoanTransaction
 from datetime import datetime, timezone
+from typing import Optional
 
 router = APIRouter(
     prefix="/loan-transactions",
@@ -69,31 +73,6 @@ def read_loan_transaction(
     return transaction
 
 
-@router.put(
-    "/{transaction_id}/status",
-    response_model=LoanTransactionResponse
-)
-def update_loan_transaction_status(
-    transaction_id: int,
-    status: LoanTransactionUpdateStatus,
-    db: Session = Depends(get_db)
-):
-    transaction = db.query(LoanTransaction).filter(
-        LoanTransaction.id == transaction_id
-    ).first()
-    if not transaction:
-        raise HTTPException(
-            status_code=404,
-            detail="Transaction not found"
-        )
-    transaction.status_approval = status.status_approval
-    if status.status_approval == "Approved":
-        transaction.date_approved = datetime.now(timezone.utc)
-        # TODO: Send actions to bank/account here
-    db.commit()
-    db.refresh(transaction)
-    return transaction
-
 
 @router.delete(
     "/{transaction_id}",
@@ -114,3 +93,82 @@ def delete_loan_transaction(
     db.delete(transaction)
     db.commit()
     return {"detail": "Transaction deleted"}
+
+@router.post("/send-loan-email", response_model=dict)
+def send_loan_email(
+    email_data: SendLoanEmailRequest,
+    db: Session = Depends(get_db)
+):
+    # Get the transaction
+    transaction = db.query(LoanTransaction).filter(
+        LoanTransaction.id == email_data.transaction_id
+    ).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found"
+        )
+    
+    try:
+        if email_data.email_type == "application":
+            email_service.send_loan_application_email(
+                borrower_name=transaction.borrower,
+                loan_id=transaction.loan_id,
+                amount=transaction.loan_amount,
+                to_emails=email_data.recipient_emails
+            )
+        
+        elif email_data.email_type == "approval":
+            email_service.send_loan_approval_email(
+                borrower_name=transaction.borrower,
+                loan_id=transaction.loan_id,
+                amount=transaction.loan_amount,
+                account_no=transaction.account_no or "N/A",
+                to_emails=email_data.recipient_emails
+            )
+        
+        elif email_data.email_type == "rejection":
+            email_service.send_loan_rejection_email(
+                borrower_name=transaction.borrower,
+                loan_id=transaction.loan_id,
+                reason=email_data.rejection_reason or "Not specified",
+                to_emails=email_data.recipient_emails
+            )
+        
+        elif email_data.email_type == "custom":
+            email_service.send_custom_loan_email(
+                borrower_name=transaction.borrower,
+                loan_id=transaction.loan_id,
+                amount=transaction.loan_amount,
+                status=transaction.status_approval,
+                message=(
+                    email_data.custom_message
+                    or "Your loan status has been updated."
+                ),
+                to_emails=email_data.recipient_emails
+            )
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid email type. Use: application, approval, "
+                    "rejection, or custom"
+                )
+            )
+        
+        return {
+            "success": True,
+            "message": (
+                f"Email sent successfully to "
+                f"{len(email_data.recipient_emails)} recipient(s)"
+            ),
+            "email_type": email_data.email_type
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send email: {str(e)}"
+        )
