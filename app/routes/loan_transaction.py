@@ -15,6 +15,9 @@ from app.schemas.loan_transaction import (
 from app.models.loan_transaction import LoanTransaction
 from datetime import datetime, timezone
 from typing import Optional
+from app.models.transaction import Transaction
+from app.schemas.transaction import TransactionCreate, TransactionResponse
+
 
 router = APIRouter(
     prefix="/loan-transactions",
@@ -120,6 +123,7 @@ def delete_loan_transaction(
     db.commit()
     return {"detail": "Transaction deleted"}
 
+
 @router.post("/send-loan-email", response_model=dict)
 def send_loan_email(
     email_data: SendLoanEmailRequest,
@@ -198,3 +202,109 @@ def send_loan_email(
             status_code=500,
             detail=f"Failed to send email: {str(e)}"
         )
+
+@router.post("/mapping-insert", response_model=TransactionResponse)
+def mapping_insert_transaction(
+    transaction_id: int,
+    account_no: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a transaction record from a loan transaction.
+    Maps loan_transaction data to transactions table.
+    """
+    # Get the loan transaction
+    loan_transaction = db.query(LoanTransaction).filter(
+        LoanTransaction.id == transaction_id
+    ).first()
+    
+    if not loan_transaction:
+        raise HTTPException(
+            status_code=404,
+            detail="Loan transaction not found"
+        )
+    
+    # Check if transaction already exists for this loan
+    existing_transaction = db.query(Transaction).filter(
+        Transaction.loan_id == loan_transaction.loan_id
+    ).first()
+    
+    if existing_transaction:
+        raise HTTPException(
+            status_code=400,
+            detail="Transaction already exists for this loan"
+        )
+    
+    # Create new transaction record
+    new_transaction = Transaction(
+        loan_id=loan_transaction.loan_id,
+        user_id=loan_transaction.user_id,
+        loan_amount=loan_transaction.loan_amount,
+        account_no=account_no,
+        status_approval=loan_transaction.status_approval,
+        date_approved=loan_transaction.date_approved
+    )
+    
+    db.add(new_transaction)
+    db.commit()
+    db.refresh(new_transaction)
+    
+    return new_transaction
+
+
+@router.post("/mapping-insert-bulk", response_model=dict)
+def mapping_insert_bulk_transactions(
+    transaction_ids: list[int],
+    account_no: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Create multiple transaction records from loan transactions.
+    Bulk mapping operation.
+    """
+    created_count = 0
+    skipped_count = 0
+    created_ids = []
+    
+    for transaction_id in transaction_ids:
+        # Get loan transaction
+        loan_transaction = db.query(LoanTransaction).filter(
+            LoanTransaction.id == transaction_id
+        ).first()
+        
+        if not loan_transaction:
+            skipped_count += 1
+            continue
+        
+        # Check if already exists
+        existing = db.query(Transaction).filter(
+            Transaction.loan_id == loan_transaction.loan_id
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        # Create transaction
+        new_transaction = Transaction(
+            loan_id=loan_transaction.loan_id,
+            user_id=loan_transaction.user_id,
+            loan_amount=loan_transaction.loan_amount,
+            account_no=account_no,
+            status_approval=loan_transaction.status_approval,
+            date_approved=loan_transaction.date_approved
+        )
+        
+        db.add(new_transaction)
+        db.flush()
+        created_ids.append(new_transaction.id)
+        created_count += 1
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "created_count": created_count,
+        "skipped_count": skipped_count,
+        "created_transaction_ids": created_ids
+    }
