@@ -17,9 +17,9 @@ class BankDetail(Base):
     id = Column(Integer, primary_key=True, nullable=False)
 
     bank_name = Column(String(200), nullable=False)
-    branch_name = Column(String(200), nullable=False)
-    branch_code = Column(String(200), nullable=False)
-    account_holder_name = Column(String(200), nullable=False)
+    branch_name = Column(String(200), nullable=True)
+    branch_code = Column(String(200), nullable=True)
+    account_holder_name = Column(String(200), nullable=True)
     account_number = Column(String(200), nullable=False)
     account_type = Column(Enum(AccountType), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))

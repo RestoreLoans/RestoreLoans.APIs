@@ -10,9 +10,9 @@ class AccountType(str, Enum):
 
 class BankDetailBase(BaseModel):
     bank_name: str
-    branch_name: str
-    branch_code: str
-    account_holder_name: str
+    branch_name: Optional[str] = None
+    branch_code: Optional[str] = None
+    account_holder_name: Optional[str] = None
     account_number: str
     account_type: AccountType
 
