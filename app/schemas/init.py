@@ -6,6 +6,7 @@ from .history import HistoryBase, HistoryResponse
 from .alert import AlertBase, AlertResponse
 from .sms import SMSBase, SMSResponse
 from .transaction import TransactionBase, TransactionResponse
+from .loan_dashboard import LoanDashboardResponse, UserStats, LoanDashboardLoan, PaymentHistoryItem
 
 __all__ = [
     'UserBase', 'UserCreate', 'UserLogin', 'UserResponse',
@@ -16,5 +17,6 @@ __all__ = [
     'HistoryBase', 'HistoryResponse',
     'AlertBase', 'AlertResponse',
     'SMSBase', 'SMSResponse',
-    'TransactionBase', 'TransactionResponse'
+    'TransactionBase', 'TransactionResponse',
+    'LoanDashboardResponse', 'UserStats', 'LoanDashboardLoan', 'PaymentHistoryItem'
 ]
