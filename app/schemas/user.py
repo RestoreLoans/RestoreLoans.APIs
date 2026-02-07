@@ -20,7 +20,30 @@ class ClientDetails(BaseModel):
     email: EmailStr
     password: str
     language: Optional[str] = None
-    dob: Optional[str] = None  # Assuming string format yyyy/mm/dd
+    dob: Optional[str] = None  # Accepts string, validated below
+
+    @classmethod
+    def validate_dob(cls, value):
+        if value is None:
+            return value
+        import re
+        from datetime import datetime
+        # Accept yyyy-mm-dd or yyyy/mm/dd
+        pattern = r"^(\d{4})[-/](\d{2})[-/](\d{2})$"
+        if re.match(pattern, value):
+            try:
+                # Normalize to yyyy-mm-dd
+                value = value.replace('/', '-')
+                datetime.strptime(value, "%Y-%m-%d")
+                return value
+            except Exception:
+                raise ValueError("Invalid DOB format")
+        raise ValueError("Invalid DOB format")
+
+    @classmethod
+    def __get_validators__(cls):
+        yield from super().__get_validators__()
+        yield cls.validate_dob
     nationality: Optional[int] = None
     gender: str
 
