@@ -53,9 +53,18 @@ class AuthService:
         # Parse dates
         dob = None
         if client.dob:
-            try:
-                dob = datetime.strptime(client.dob, "%Y/%m/%d").date()
-            except ValueError:
+            if isinstance(client.dob, str):
+                try:
+                    # Accept yyyy-mm-dd or yyyy/mm/dd
+                    dob_str = client.dob.replace('/', '-')
+                    dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Invalid DOB format")
+            elif isinstance(client.dob, datetime):
+                dob = client.dob.date()
+            elif hasattr(client.dob, 'isoformat'):
+                dob = client.dob
+            else:
                 raise HTTPException(status_code=400, detail="Invalid DOB format")
 
         # Create new user first
