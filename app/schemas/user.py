@@ -43,10 +43,14 @@ class EmployerDetails(BaseModel):
     contractEndDate: Optional[str] = None
 
 class BankDetails(BaseModel):
-    bankName: str
-    branch: Optional[str] = None
-    accountNumber: str
-    accountType: str
+    bank_name: str
+    branch_name: Optional[str] = None
+    branch_code: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    account_number: str
+    account_type: str  # Should match Enum(AccountType) if used
+    created_at: Optional[date] = None
+    updated_at: Optional[date] = None
 
 class RegisterPayload(BaseModel):
     clientDetails: ClientDetails
