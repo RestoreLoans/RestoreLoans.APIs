@@ -44,6 +44,7 @@ class EmployerDetails(BaseModel):
 
 class BankDetails(BaseModel):
     bank_name: str
+    custom_bank_name: Optional[str] = None  # Only populated if "Other" is selected
     branch_name: Optional[str] = None
     branch_code: Optional[str] = None
     account_holder_name: Optional[str] = None

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Enum, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from app.database import Base
@@ -12,6 +13,7 @@ class AccountType(str, enum.Enum):
 
 
 class BankDetail(Base):
+    users = relationship("User", back_populates="bank")
     __tablename__ = "bank_details"
 
     id = Column(Integer, primary_key=True, nullable=False)

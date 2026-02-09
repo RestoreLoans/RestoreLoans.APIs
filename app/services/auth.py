@@ -93,11 +93,21 @@ class AuthService:
         db.refresh(db_user)
 
         # Create bank detail
+        # Validate and map account_type to allowed enum values
+        allowed_types = {"savings", "current", "cheque"}
+        acct_type = bank.account_type.lower() if bank.account_type else None
+        if acct_type not in allowed_types:
+            raise HTTPException(status_code=400, detail=f"Invalid account_type: {acct_type}. Allowed: savings, current, cheque")
+
         db_bank = BankDetail(
-            bank_name=bank.bankName,
-            branch_name=bank.branch,
-            account_number=bank.accountNumber,
-            account_type=bank.accountType.lower()  # assuming string matches enum
+            bank_name=bank.bank_name,
+            branch_name=bank.branch_name,
+            branch_code=bank.branch_code,
+            account_holder_name=bank.account_holder_name,
+            account_number=bank.account_number,
+            account_type=acct_type,
+            created_at=bank.created_at,
+            updated_at=bank.updated_at
         )
         db.add(db_bank)
         db.commit()

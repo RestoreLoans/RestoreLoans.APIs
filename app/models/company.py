@@ -28,4 +28,4 @@ class Company(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
-    user = relationship("User", foreign_keys=[user_id])
+    users = relationship("User", back_populates="company", foreign_keys="User.company_id")

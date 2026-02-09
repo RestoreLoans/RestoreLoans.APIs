@@ -34,18 +34,18 @@ class User(Base):
     created_at = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
-    company_id = Column(Integer, ForeignKey("companies.id",ondelete="SET NULL"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     company = relationship(
         "Company",
-     
-        foreign_keys=[company_id] ,  # 👈 specify explicitly
-        passive_deletes=True   # ✅ important
+        back_populates="users",
+        foreign_keys=[company_id],
+        passive_deletes=True
     )
-    bank_id = Column(Integer, ForeignKey("bank_details.id",ondelete="SET NULL"), nullable=True)
+    bank_id = Column(Integer, ForeignKey("bank_details.id", ondelete="SET NULL"), nullable=True)
     bank = relationship(
         "BankDetail",
-     
-        foreign_keys=[bank_id] ,  # 👈 specify explicitly
-        passive_deletes=True   # ✅ important
+        back_populates="users",
+        foreign_keys=[bank_id],
+        passive_deletes=True
     )
     
