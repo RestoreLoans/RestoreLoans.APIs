@@ -9,6 +9,8 @@ from app.schemas.loan_dashboard import LoanDashboardResponse, UserStats, LoanDas
 from google.cloud import storage
 import os
 from datetime import datetime
+import logging
+from app.services.email_service import email_service
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "app/utils/google.json"
@@ -93,6 +95,18 @@ def create_loan(  loan_type: str = Form(...),
     db.add(new_loan)
     db.commit()
     db.refresh(new_loan)
+    # Send application notification email (do not block on email failures)
+    try:
+        borrower_name = f"{user.first_name} {user.last_name}".strip()
+        # Best-effort send; log any failures
+        email_service.send_loan_application_email(
+            borrower_name=borrower_name,
+            loan_id=new_loan.id,
+            amount=new_loan.loan_amount,
+            to_emails=[user.email] if getattr(user, 'email', None) else []
+        )
+    except Exception as e:
+        logging.error("Failed to send loan application email for loan %s: %s", new_loan.id, e)
     return new_loan
 
 @router.get("/", response_model=list[LoanResponse], status_code=status.HTTP_200_OK)
