@@ -2,14 +2,25 @@ from fastapi import FastAPI
 from app.routes.loan_transaction import router as loan_transaction_router
 from app.routes import auth, user, userRoles, company, loan, bank, document, history, alert, sms, transaction
 from app.database import engine, Base
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import loan_transaction
 import app.models as models
+# Avoid connecting to the DB at import time; run migrations on startup instead.
 #Base.metadata.drop_all(bind=engine)   # Deletes all tables
-Base.metadata.create_all(bind=engine) # Recreates all tables with new fields
 
 
 app = FastAPI(title="RestoreLoans API2", version="1.0.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logging.error("Database unavailable on startup: %s", e)
+        # don't re-raise so the app can still start in environments
+        # where the DB is temporarily unreachable (local dev, CI, etc.)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Or specify your frontend's URL
