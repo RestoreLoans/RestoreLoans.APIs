@@ -5,6 +5,9 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserLoginWithRegistration
 from app.services.auth import AuthService
 from app.utils.security import verify_password
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/users",
@@ -58,10 +61,16 @@ def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: S
             detail="Invalid email or password."
         )
 
-    if str(user.id_number).strip() != str(payload.registration_no).strip():
+    db_reg_no = str(user.id_number).strip()
+    payload_reg_no = str(payload.registration_no).strip()
+
+    logger.info(f"Comparing registration numbers - DB: '{db_reg_no}' vs Payload: '{payload_reg_no}'")
+
+    if db_reg_no != payload_reg_no:
+        logger.warning(f"Registration number mismatch for user {user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Registration number does not match. Expected: {user.id_number}"
+            detail=f"Registration number does not match. Expected: '{db_reg_no}', Got: '{payload_reg_no}'"
         )
 
     return user
