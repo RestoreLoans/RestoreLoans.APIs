@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserLoginWithRegistration
 from app.services.auth import AuthService
+from app.utils.security import verify_password
 
 router = APIRouter(
     prefix="/users",
@@ -41,6 +42,29 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     return new_user
+
+@router.post("/login/by-registration", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password."
+        )
+
+    if not verify_password(payload.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password."
+        )
+
+    if user.id_number != payload.registration_no:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration number does not match."
+        )
+
+    return user
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def get_user(user_id: int, db: Session = Depends(get_db)):
