@@ -61,19 +61,36 @@ def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: S
             detail="Invalid email or password."
         )
 
-    db_reg_no = str(user.id_number).strip()
-    payload_reg_no = str(payload.registration_no).strip()
+    # Normalize both registration numbers for comparison
+    db_reg_no = str(user.id_number).strip().lower()
+    payload_reg_no = str(payload.registration_no).strip().lower()
 
-    logger.info(f"Comparing registration numbers - DB: '{db_reg_no}' vs Payload: '{payload_reg_no}'")
+    logger.info(f"User {user.email} - DB registration: '{db_reg_no}' vs Payload: '{payload_reg_no}'")
 
     if db_reg_no != payload_reg_no:
-        logger.warning(f"Registration number mismatch for user {user.email}")
+        logger.warning(f"Registration mismatch for {user.email}: expected '{db_reg_no}', got '{payload_reg_no}'")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Registration number does not match. Expected: '{db_reg_no}', Got: '{payload_reg_no}'"
+            detail=f"Registration number does not match"
         )
 
+    logger.info(f"Successful login with registration for user {user.email}")
     return user
+
+@router.get("/debug/check-user/{email}", status_code=status.HTTP_200_OK)
+def debug_check_user(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        return {"status": "not_found", "email": email}
+    return {
+        "status": "found",
+        "email": user.email,
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "id_number": user.id_number,
+        "id_number_type": type(user.id_number).__name__
+    }
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def get_user(user_id: int, db: Session = Depends(get_db)):
