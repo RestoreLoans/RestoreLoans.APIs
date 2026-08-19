@@ -127,5 +127,3 @@ class UserUpdate(BaseModel):
 
 class UserLoginWithRegistration(BaseModel):
     email: EmailStr
-    password: str
-    registration_no: str

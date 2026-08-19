@@ -4,7 +4,6 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserLoginWithRegistration
 from app.services.auth import AuthService
-from app.utils.security import verify_password
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,30 +50,11 @@ def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: S
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with email '{payload.email}' not found."
         )
 
-    if not verify_password(payload.password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password."
-        )
-
-    # Normalize both registration numbers for comparison
-    db_reg_no = str(user.id_number).strip().lower()
-    payload_reg_no = str(payload.registration_no).strip().lower()
-
-    logger.info(f"User {user.email} - DB registration: '{db_reg_no}' vs Payload: '{payload_reg_no}'")
-
-    if db_reg_no != payload_reg_no:
-        logger.warning(f"Registration mismatch for {user.email}: expected '{db_reg_no}', got '{payload_reg_no}'")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Registration number '{payload_reg_no}' does not match. Your registration number is: {user.id_number}"
-        )
-
-    logger.info(f"Successful login with registration for user {user.email}")
+    logger.info(f"Retrieved user information for {user.email}")
     return user
 
 @router.get("/debug/check-user/{email}", status_code=status.HTTP_200_OK)
