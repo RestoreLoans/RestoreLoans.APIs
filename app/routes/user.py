@@ -71,7 +71,7 @@ def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: S
         logger.warning(f"Registration mismatch for {user.email}: expected '{db_reg_no}', got '{payload_reg_no}'")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Registration number does not match"
+            detail=f"Registration number '{payload_reg_no}' does not match. Your registration number is: {user.id_number}"
         )
 
     logger.info(f"Successful login with registration for user {user.email}")
