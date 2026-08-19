@@ -58,10 +58,10 @@ def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: S
             detail="Invalid email or password."
         )
 
-    if user.id_number != payload.registration_no:
+    if str(user.id_number).strip() != str(payload.registration_no).strip():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Registration number does not match."
+            detail=f"Registration number does not match. Expected: {user.id_number}"
         )
 
     return user
