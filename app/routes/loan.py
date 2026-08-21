@@ -53,10 +53,21 @@ def _get_application_date(loan: Loan):
     return created_at
 
 
+def _parse_interest_rate(value: str) -> float:
+    cleaned = str(value).strip().replace("%", "").replace(",", "")
+    try:
+        return float(cleaned)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid interest_rate: '{value}'"
+        )
+
+
 @router.post("/", response_model=LoanResponse, status_code=status.HTTP_201_CREATED)
 def create_loan(  loan_type: str = Form(...),
     loan_amount: float = Form(...),
-    interest_rate: float = Form(...),
+    interest_rate: str = Form(...),
     loan_term: int = Form(...),
     monthly_installment: float = Form(...),
     start_date: str = Form(...),
@@ -71,15 +82,15 @@ def create_loan(  loan_type: str = Form(...),
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID"
-               
+
         )
-    
+
     # Create a new loan instance
     new_loan = Loan(
         user_id=user_id,
         loan_type=loan_type,
         loan_amount=loan_amount,
-        interest_rate=interest_rate,
+        interest_rate=_parse_interest_rate(interest_rate),
         loan_term=loan_term,
         monthly_installment=monthly_installment,
         start_date=start_date,
