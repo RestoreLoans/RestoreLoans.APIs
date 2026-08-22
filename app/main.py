@@ -19,9 +19,24 @@ app = FastAPI(title="RestoreLoans API2", version="1.0.0")
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
-    logging.error("422 Validation error on %s %s: %s",
-                  request.method, request.url.path,
-                  [(e.get("loc"), e.get("msg"), e.get("input")) for e in errors])
+    content_type = request.headers.get("content-type", "<none>")
+    received_keys = None
+    try:
+        form = await request.form()
+        received_keys = list(form.keys())
+    except Exception:
+        pass
+    if not received_keys:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                received_keys = list(body.keys())
+        except Exception:
+            received_keys = None
+    logging.error(
+        "422 Validation error on %s %s | content-type=%s | keys received=%s | errors=%s",
+        request.method, request.url.path, content_type, received_keys,
+        [(e.get("loc"), e.get("msg")) for e in errors])
     return JSONResponse(status_code=422, content={"detail": errors})
 
 
