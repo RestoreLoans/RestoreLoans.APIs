@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from app.routes.loan_transaction import router as loan_transaction_router
 from app.routes import auth, user, userRoles, company, loan, bank, document, history, alert, sms, transaction
 from app.database import engine, Base
@@ -12,6 +14,15 @@ import app.models as models
 
 
 app = FastAPI(title="RestoreLoans API2", version="1.0.0")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    logging.error("422 Validation error on %s %s: %s",
+                  request.method, request.url.path,
+                  [(e.get("loc"), e.get("msg"), e.get("input")) for e in errors])
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 @app.on_event("startup")
