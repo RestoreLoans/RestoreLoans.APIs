@@ -10,8 +10,8 @@ load_dotenv()
 
 class EmailService:
     def __init__(self):
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_server = os.getenv("SMTP_SERVER", "mail.restoreloans.co.za")
+        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))
         self.sender_email = os.getenv("SENDER_EMAIL")
         self.sender_password = os.getenv("SENDER_PASSWORD")
 
@@ -31,10 +31,17 @@ class EmailService:
         message.attach(MIMEText(body, content_type))
 
         try:
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.sender_email, self.sender_password)
-                server.send_message(message)
+            if self.smtp_port == 465:
+                # Implicit TLS (SMTPS)
+                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
+                    server.login(self.sender_email, self.sender_password)
+                    server.send_message(message)
+            else:
+                # STARTTLS (e.g. port 587)
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.sender_email, self.sender_password)
+                    server.send_message(message)
             return True
         except Exception as e:
             raise Exception(f"Failed to send email: {str(e)}")
