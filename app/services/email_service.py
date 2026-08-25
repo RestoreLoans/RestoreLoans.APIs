@@ -91,7 +91,7 @@ class EmailService:
                 "      <p><strong>Application Details:</strong></p>",
                 "      <ul>",
                 f"        <li>Loan ID: #{loan_id}</li>",
-                f"        <li>Amount: ${amount:,.2f}</li>",
+                f"        <li>Amount: R{amount:,.2f}</li>",
                 "        <li>Status: Pending Review</li>",
                 "      </ul>",
                 "    </div>",
