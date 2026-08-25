@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 from app.routes.loan_transaction import router as loan_transaction_router
 from app.routes import auth, user, userRoles, company, loan, bank, document, history, alert, sms, transaction
 from app.database import engine, Base
@@ -13,7 +14,16 @@ import app.models as models
 #Base.metadata.drop_all(bind=engine)   # Deletes all tables
 
 
-app = FastAPI(title="RestoreLoans API2", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await asyncio.to_thread(Base.metadata.create_all, bind=engine)
+    except Exception as e:
+        logging.error("Database unavailable on startup: %s", e)
+    yield
+
+
+app = FastAPI(title="RestoreLoans API2", version="1.0.0", lifespan=lifespan)
 
 
 @app.exception_handler(RequestValidationError)
@@ -40,14 +50,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": errors})
 
 
-@app.on_event("startup")
-async def startup_event():
-    try:
-        # Run blocking DB schema creation in a thread to avoid blocking the event loop
-        await asyncio.to_thread(Base.metadata.create_all, bind=engine)
-    except Exception as e:
-        logging.error("Database unavailable on startup: %s", e)
-        # don't re-raise so the app can still start if DB is temporarily unreachable
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Or specify your frontend's URL
