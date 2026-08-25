@@ -267,7 +267,7 @@ class EmailService:
         to_emails: List[str],
         attachments: Optional[List[tuple]] = None,
     ):
-        subject = f"New Loan Application - #{loan_id}"
+        subject = "New Loan Application"
         body = "\n".join(
             [
                 "<html>",
@@ -283,7 +283,7 @@ class EmailService:
                 f"        <li>Borrower: {borrower_name}</li>",
                 f"        <li>Loan ID: #{loan_id}</li>",
                 f"        <li>Loan Type: {loan_type}</li>",
-                f"        <li>Amount: ${amount:,.2f}</li>",
+                f"        <li>Amount: R {amount:,.2f}</li>",
                 f"        <li>Interest Rate: {interest_rate}%</li>",
                 f"        <li>Loan Term: {loan_term} months</li>",
                 "        <li>Status: Pending Review</li>",

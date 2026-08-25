@@ -1,3 +1,4 @@
+import requests as http_requests
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -217,6 +218,68 @@ def send_loan_email(
             status_code=500,
             detail=f"Failed to send email: {str(e)}"
         )
+
+@router.post("/send-application-docs-email")
+def send_application_docs_email(
+    transaction_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Send the applicant's documents to applicants@restoreloans.co.za.
+
+    Downloads the ID document, bank statement and proof of residence
+    attached to the loan record and emails them to the internal
+    review inbox with subject 'New Loan Application'.
+    """
+    from app.models.loan import Loan
+
+    txn = db.query(LoanTransaction).filter(
+        LoanTransaction.id == transaction_id
+    ).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    loan = db.query(Loan).filter(Loan.id == txn.loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found for transaction")
+
+    attachments = []
+    doc_urls = [
+        (loan.id_path, "id_document"),
+        (loan.bank_path, "bank_statement"),
+        (loan.proof_of_residence_path, "proof_of_residence"),
+    ]
+    for url, label in doc_urls:
+        if url:
+            try:
+                resp = http_requests.get(url, timeout=30)
+                resp.raise_for_status()
+                filename = url.split("/")[-1].split("?")[0] or f"{label}.pdf"
+                attachments.append((resp.content, filename))
+            except Exception as exc:
+                logging.warning("Could not download %s from %s: %s", label, url, exc)
+
+    loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
+    try:
+        email_service.send_application_with_docs_email(
+            borrower_name=txn.borrower,
+            loan_id=txn.loan_id,
+            amount=txn.loan_amount,
+            loan_type=loan_type_str,
+            interest_rate=loan.interest_rate or 0,
+            loan_term=loan.loan_term or 0,
+            to_emails=["applicants@restoreloans.co.za"],
+            attachments=attachments or None,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send application docs email: {exc}"
+        )
+
+    return {
+        "success": True,
+        "message": "Application documents sent to applicants@restoreloans.co.za",
+    }
 
 @router.post("/mapping-insert", response_model=TransactionResponse)
 def mapping_insert_transaction(
