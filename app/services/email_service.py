@@ -16,6 +16,8 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.sender_email = os.getenv("SENDER_EMAIL")
         self.sender_password = os.getenv("SENDER_PASSWORD")
+        self.smtp_username = os.getenv("SMTP_USERNAME", self.sender_email)
+        self.smtp_password = os.getenv("SMTP_PASSWORD", self.sender_password)
 
     def send_email(
         self,
@@ -47,16 +49,22 @@ class EmailService:
             message.attach(part)
 
         try:
-            if self.smtp_port == 465:
+            is_local = self.smtp_server in ("127.0.0.1", "localhost")
+            if is_local:
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.send_message(message)
+            elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
                 with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                    server.login(self.sender_email, self.sender_password)
+                    server.ehlo("restoreloans.co.za")
+                    server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             else:
                 # STARTTLS (e.g. port 587)
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.ehlo("restoreloans.co.za")
                     server.starttls()
-                    server.login(self.sender_email, self.sender_password)
+                    server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             return True
         except Exception as e:
@@ -68,36 +76,42 @@ class EmailService:
         loan_id: int,
         amount: float,
         to_emails: List[str],
+        custom_message: Optional[str] = None,
     ):
-        subject = f"Loan Application Received - #{loan_id}"
-        body = "\n".join(
-            [
-                "<html>",
-                "  <body style=\"font-family: Arial, sans-serif; "
-                "padding: 20px;\">",
-                "    <h2 style=\"color: #2c3e50;\">"
-                "Loan Application Received</h2>",
-                f"    <p>Dear {borrower_name},</p>",
-                "    <p>We have successfully received your loan",
-                "    application.</p>",
-                "    <div style=\"background-color: #f8f9fa; padding: 15px; "
-                "border-radius: 5px; margin: 20px 0;\">",
-                "      <p><strong>Application Details:</strong></p>",
-                "      <ul>",
-                f"        <li>Loan ID: #{loan_id}</li>",
-                f"        <li>Amount: ${amount:,.2f}</li>",
-                "        <li>Status: Pending Review</li>",
-                "      </ul>",
-                "    </div>",
-                "    <p>Our team will review your application and contact",
-                "    you shortly.</p>",
-                "    <br>",
-                "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
-                "  </body>",
-                "</html>",
+        subject = "Loan Application Received"
+        is_html = True
+        if custom_message:
+            body = custom_message
+            is_html = not any(tag in custom_message.lower() for tag in ['<html', '<body', '<p', '<div', '<h2'])
+        else:
+            body = "\n".join(
+                [
+                    "<html>",
+                    "  <body style=\"font-family: Arial, sans-serif; "
+                    "padding: 20px;\">",
+                    "    <h2 style=\"color: #2c3e50;\">"
+                    "Loan Application Received</h2>",
+                    f"    <p>Dear {borrower_name},</p>",
+                    "    <p>We have successfully received your loan",
+                    "    application.</p>",
+                    "    <div style=\"background-color: #f8f9fa; padding: 15px; "
+                    "border-radius: 5px; margin: 20px 0;\">",
+                    "      <p><strong>Application Details:</strong></p>",
+                    "      <ul>",
+                    f"        <li>Loan ID: #{loan_id}</li>",
+                    f"        <li>Amount: R{amount:,.2f}</li>",
+                    "        <li>Status: Pending Review</li>",
+                    "      </ul>",
+                    "    </div>",
+                    "    <p>Our team will review your application and contact",
+                    "    you shortly.</p>",
+                    "    <br>",
+                    "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
+                    "  </body>",
+                    "</html>",
             ]
         )
-        return self.send_email(to_emails, subject, body)
+        return self.send_email(to_emails, subject, body, is_html=is_html)
 
     def send_loan_approval_email(
         self,
