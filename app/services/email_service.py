@@ -199,6 +199,47 @@ class EmailService:
         )
         return self.send_email(to_emails, subject, body)
 
+    def send_contract_signed_email(
+        self,
+        borrower_name: str,
+        loan_id: int,
+        amount: float,
+        account_no: str,
+        to_emails: List[str],
+    ):
+        subject = f"Loan Contract Signed - #{loan_id}"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "padding: 20px;\">",
+                "    <h2 style=\"color: #2c3e50;\">"
+                "Loan Contract Signed Successfully</h2>",
+                f"    <p>Dear {borrower_name},</p>",
+                "    <p>Your loan contract has been <strong>"
+                "signed and confirmed</strong>. "
+                "The loan is now active and will be disbursed shortly.</p>",
+                "    <div style=\"background-color: #d4edda; padding: 15px; "
+                "border-radius: 5px; margin: 20px 0;\">",
+                "      <p><strong>Contract Details:</strong></p>",
+                "      <ul>",
+                f"        <li>Loan ID: #{loan_id}</li>",
+                f"        <li>Approved Amount: ${amount:,.2f}</li>",
+                f"        <li>Account Number: {account_no}</li>",
+                "        <li>Status: Contract Signed</li>",
+                "      </ul>",
+                "    </div>",
+                "    <p>If you have any questions, please contact our "
+                "support team.</p>",
+                "    <br>",
+                "    <p>Best regards,<br><strong>"
+                "RestoreLoans Team</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email(to_emails, subject, body)
+
 
 # Create a singleton instance
 email_service = EmailService()
