@@ -162,7 +162,8 @@ def send_loan_email(
                 borrower_name=transaction.borrower,
                 loan_id=transaction.loan_id,
                 amount=transaction.loan_amount,
-                to_emails=email_data.recipient_emails
+                to_emails=email_data.recipient_emails,
+                custom_message=email_data.custom_message,
             )
         
         elif email_data.email_type == "approval":

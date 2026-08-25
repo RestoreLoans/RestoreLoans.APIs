@@ -74,33 +74,37 @@ class EmailService:
         loan_id: int,
         amount: float,
         to_emails: List[str],
+        custom_message: Optional[str] = None,
     ):
-        subject = f"Loan Application Received - #{loan_id}"
-        body = "\n".join(
-            [
-                "<html>",
-                "  <body style=\"font-family: Arial, sans-serif; "
-                "padding: 20px;\">",
-                "    <h2 style=\"color: #2c3e50;\">"
-                "Loan Application Received</h2>",
-                f"    <p>Dear {borrower_name},</p>",
-                "    <p>We have successfully received your loan",
-                "    application.</p>",
-                "    <div style=\"background-color: #f8f9fa; padding: 15px; "
-                "border-radius: 5px; margin: 20px 0;\">",
-                "      <p><strong>Application Details:</strong></p>",
-                "      <ul>",
-                f"        <li>Loan ID: #{loan_id}</li>",
-                f"        <li>Amount: R{amount:,.2f}</li>",
-                "        <li>Status: Pending Review</li>",
-                "      </ul>",
-                "    </div>",
-                "    <p>Our team will review your application and contact",
-                "    you shortly.</p>",
-                "    <br>",
-                "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
-                "  </body>",
-                "</html>",
+        subject = "Loan Application Received"
+        if custom_message:
+            body = custom_message
+        else:
+            body = "\n".join(
+                [
+                    "<html>",
+                    "  <body style=\"font-family: Arial, sans-serif; "
+                    "padding: 20px;\">",
+                    "    <h2 style=\"color: #2c3e50;\">"
+                    "Loan Application Received</h2>",
+                    f"    <p>Dear {borrower_name},</p>",
+                    "    <p>We have successfully received your loan",
+                    "    application.</p>",
+                    "    <div style=\"background-color: #f8f9fa; padding: 15px; "
+                    "border-radius: 5px; margin: 20px 0;\">",
+                    "      <p><strong>Application Details:</strong></p>",
+                    "      <ul>",
+                    f"        <li>Loan ID: #{loan_id}</li>",
+                    f"        <li>Amount: R{amount:,.2f}</li>",
+                    "        <li>Status: Pending Review</li>",
+                    "      </ul>",
+                    "    </div>",
+                    "    <p>Our team will review your application and contact",
+                    "    you shortly.</p>",
+                    "    <br>",
+                    "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
+                    "  </body>",
+                    "</html>",
             ]
         )
         return self.send_email(to_emails, subject, body)
