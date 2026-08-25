@@ -89,6 +89,7 @@ class EmailService:
         custom_message: Optional[str] = None,
     ):
         subject = "Loan Application Received"
+        is_html = True
         if custom_message:
             body = custom_message
             is_html = any(tag in custom_message.lower() for tag in ['<html', '<body', '<p', '<div', '<h2'])
