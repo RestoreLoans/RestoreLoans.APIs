@@ -124,3 +124,6 @@ class UserUpdate(BaseModel):
 
     class Config:
         from_attributes= True
+
+class UserLoginWithRegistration(BaseModel):
+    email: EmailStr

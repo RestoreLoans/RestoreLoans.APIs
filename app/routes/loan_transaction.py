@@ -1,3 +1,4 @@
+import requests as http_requests
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -5,6 +6,10 @@ from app.models.company import Company
 from app.schemas.company import CompanyResponse
 from app.schemas.email import SendLoanEmailRequest
 from app.services.email_service import email_service  # Change from 'email' to 'email_service'
+
+from pydantic import BaseModel
+from typing import List
+import logging
 
 
 from app.schemas.loan_transaction import (
@@ -14,9 +19,20 @@ from app.schemas.loan_transaction import (
 )
 from app.models.loan_transaction import LoanTransaction
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate, TransactionResponse
+
+
+class MappingInsertRequest(BaseModel):
+    transaction_id: int
+    account_no: str
+    to_emails: Optional[List[str]] = None
+
+class MappingInsertBulkRequest(BaseModel):
+    transaction_ids: List[int]
+    account_no: str
+    to_emails: Optional[List[str]] = None
 
 
 router = APIRouter(
@@ -203,19 +219,81 @@ def send_loan_email(
             detail=f"Failed to send email: {str(e)}"
         )
 
+@router.post("/send-application-docs-email")
+def send_application_docs_email(
+    transaction_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Send the applicant's documents to applicants@restoreloans.co.za.
+
+    Downloads the ID document, bank statement and proof of residence
+    attached to the loan record and emails them to the internal
+    review inbox with subject 'New Loan Application'.
+    """
+    from app.models.loan import Loan
+
+    txn = db.query(LoanTransaction).filter(
+        LoanTransaction.id == transaction_id
+    ).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    loan = db.query(Loan).filter(Loan.id == txn.loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found for transaction")
+
+    attachments = []
+    doc_urls = [
+        (loan.id_path, "id_document"),
+        (loan.bank_path, "bank_statement"),
+        (loan.proof_of_residence_path, "proof_of_residence"),
+    ]
+    for url, label in doc_urls:
+        if url:
+            try:
+                resp = http_requests.get(url, timeout=30)
+                resp.raise_for_status()
+                filename = url.split("/")[-1].split("?")[0] or f"{label}.pdf"
+                attachments.append((resp.content, filename))
+            except Exception as exc:
+                logging.warning("Could not download %s from %s: %s", label, url, exc)
+
+    loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
+    try:
+        email_service.send_application_with_docs_email(
+            borrower_name=txn.borrower,
+            loan_id=txn.loan_id,
+            amount=txn.loan_amount,
+            loan_type=loan_type_str,
+            interest_rate=loan.interest_rate or 0,
+            loan_term=loan.loan_term or 0,
+            to_emails=["applicants@restoreloans.co.za"],
+            attachments=attachments or None,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send application docs email: {exc}"
+        )
+
+    return {
+        "success": True,
+        "message": "Application documents sent to applicants@restoreloans.co.za",
+    }
+
 @router.post("/mapping-insert", response_model=TransactionResponse)
 def mapping_insert_transaction(
-    transaction_id: int,
-    account_no: str,
+    request: MappingInsertRequest,
     db: Session = Depends(get_db)
 ):
     """
     Create a transaction record from a loan transaction.
     Maps loan_transaction data to transactions table.
+    Sends contract signed email if to_emails provided.
     """
     # Get the loan transaction
     loan_transaction = db.query(LoanTransaction).filter(
-        LoanTransaction.id == transaction_id
+        LoanTransaction.id == request.transaction_id
     ).first()
     
     if not loan_transaction:
@@ -240,7 +318,7 @@ def mapping_insert_transaction(
         loan_id=loan_transaction.loan_id,
         user_id=loan_transaction.user_id,
         loan_amount=loan_transaction.loan_amount,
-        account_no=account_no,
+        account_no=request.account_no,
         status_approval=loan_transaction.status_approval,
         date_approved=loan_transaction.date_approved
     )
@@ -248,25 +326,39 @@ def mapping_insert_transaction(
     db.add(new_transaction)
     db.commit()
     db.refresh(new_transaction)
-    
+
+    # Send contract signed email
+    if request.to_emails:
+        try:
+            email_service.send_contract_signed_email(
+                borrower_name=loan_transaction.borrower,
+                loan_id=loan_transaction.loan_id,
+                amount=loan_transaction.loan_amount,
+                account_no=request.account_no,
+                to_emails=request.to_emails
+            )
+        except Exception as e:
+            logging.warning("Contract email failed (transaction %s created): %s",
+                            request.transaction_id, e)
+
     return new_transaction
 
 
 @router.post("/mapping-insert-bulk", response_model=dict)
 def mapping_insert_bulk_transactions(
-    transaction_ids: list[int],
-    account_no: str,
+    request: MappingInsertBulkRequest,
     db: Session = Depends(get_db)
 ):
     """
     Create multiple transaction records from loan transactions.
-    Bulk mapping operation.
+    Bulk mapping operation. Sends contract signed emails if to_emails provided.
     """
     created_count = 0
     skipped_count = 0
     created_ids = []
+    emailed_count = 0
     
-    for transaction_id in transaction_ids:
+    for transaction_id in request.transaction_ids:
         # Get loan transaction
         loan_transaction = db.query(LoanTransaction).filter(
             LoanTransaction.id == transaction_id
@@ -290,7 +382,7 @@ def mapping_insert_bulk_transactions(
             loan_id=loan_transaction.loan_id,
             user_id=loan_transaction.user_id,
             loan_amount=loan_transaction.loan_amount,
-            account_no=account_no,
+            account_no=request.account_no,
             status_approval=loan_transaction.status_approval,
             date_approved=loan_transaction.date_approved
         )
@@ -299,6 +391,21 @@ def mapping_insert_bulk_transactions(
         db.flush()
         created_ids.append(new_transaction.id)
         created_count += 1
+
+        # Send contract signed email
+        if request.to_emails:
+            try:
+                email_service.send_contract_signed_email(
+                    borrower_name=loan_transaction.borrower,
+                    loan_id=loan_transaction.loan_id,
+                    amount=loan_transaction.loan_amount,
+                    account_no=request.account_no,
+                    to_emails=request.to_emails
+                )
+                emailed_count += 1
+            except Exception as e:
+                logging.warning("Contract email failed (transaction %s): %s",
+                                transaction_id, e)
     
     db.commit()
     
@@ -306,5 +413,6 @@ def mapping_insert_bulk_transactions(
         "success": True,
         "created_count": created_count,
         "skipped_count": skipped_count,
+        "emailed_count": emailed_count,
         "created_transaction_ids": created_ids
     }

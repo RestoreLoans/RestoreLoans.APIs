@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserLoginWithRegistration
 from app.services.auth import AuthService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/users",
@@ -41,6 +44,33 @@ def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     return new_user
+
+@router.post("/login/by-registration", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with email '{payload.email}' not found."
+        )
+
+    logger.info(f"Retrieved user information for {user.email}")
+    return user
+
+@router.get("/debug/check-user/{email}", status_code=status.HTTP_200_OK)
+def debug_check_user(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        return {"status": "not_found", "email": email}
+    return {
+        "status": "found",
+        "email": user.email,
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "id_number": user.id_number,
+        "id_number_type": type(user.id_number).__name__
+    }
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def get_user(user_id: int, db: Session = Depends(get_db)):
