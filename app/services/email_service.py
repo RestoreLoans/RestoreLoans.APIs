@@ -16,6 +16,8 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.sender_email = os.getenv("SENDER_EMAIL")
         self.sender_password = os.getenv("SENDER_PASSWORD")
+        self.smtp_username = os.getenv("SMTP_USERNAME", self.sender_email)
+        self.smtp_password = os.getenv("SMTP_PASSWORD", self.sender_password)
 
     def send_email(
         self,
@@ -54,13 +56,13 @@ class EmailService:
             elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
                 with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                    server.login(self.sender_email, self.sender_password)
+                    server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             else:
                 # STARTTLS (e.g. port 587)
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                     server.starttls()
-                    server.login(self.sender_email, self.sender_password)
+                    server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             return True
         except Exception as e:
