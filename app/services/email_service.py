@@ -1,7 +1,9 @@
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import List
+from email.mime.base import MIMEBase
+from email import encoders as mime_encoders
+from typing import List, Optional, IO
 import os
 from dotenv import load_dotenv
 
@@ -21,14 +23,28 @@ class EmailService:
         subject: str,
         body: str,
         is_html: bool = True,
+        attachments: Optional[List[tuple]] = None,
     ) -> bool:
-        message = MIMEMultipart("alternative")
+        if not to_emails:
+            raise Exception("No recipient emails provided")
+
+        msg_type = "mixed" if attachments else "alternative"
+        message = MIMEMultipart(msg_type)
         message["From"] = self.sender_email
         message["To"] = ", ".join(to_emails)
         message["Subject"] = subject
 
         content_type = "html" if is_html else "plain"
         message.attach(MIMEText(body, content_type))
+
+        for file_bytes, filename in (attachments or []):
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(file_bytes)
+            mime_encoders.encode_base64(part)
+            part.add_header(
+                "Content-Disposition", f'attachment; filename="{filename}"'
+            )
+            message.attach(part)
 
         try:
             if self.smtp_port == 465:
@@ -239,6 +255,52 @@ class EmailService:
             ]
         )
         return self.send_email(to_emails, subject, body)
+
+    def send_application_with_docs_email(
+        self,
+        borrower_name: str,
+        loan_id: int,
+        amount: float,
+        loan_type: str,
+        interest_rate: float,
+        loan_term: int,
+        to_emails: List[str],
+        attachments: Optional[List[tuple]] = None,
+    ):
+        subject = f"New Loan Application - #{loan_id}"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "padding: 20px;\">",
+                "    <h2 style=\"color: #2c3e50;\">New Loan Application</h2>",
+                f"    <p>A new loan application has been submitted and "
+                f"requires review.</p>",
+                "    <div style=\"background-color: #f8f9fa; padding: 15px; "
+                "border-radius: 5px; margin: 20px 0;\">",
+                "      <p><strong>Applicant Details:</strong></p>",
+                "      <ul>",
+                f"        <li>Borrower: {borrower_name}</li>",
+                f"        <li>Loan ID: #{loan_id}</li>",
+                f"        <li>Loan Type: {loan_type}</li>",
+                f"        <li>Amount: ${amount:,.2f}</li>",
+                f"        <li>Interest Rate: {interest_rate}%</li>",
+                f"        <li>Loan Term: {loan_term} months</li>",
+                "        <li>Status: Pending Review</li>",
+                "      </ul>",
+                "    </div>",
+                "    <p>Supporting documents (ID, bank statement, "
+                "proof of residence) are attached to this email.</p>",
+                "    <br>",
+                "    <p>Best regards,<br><strong>"
+                "RestoreLoans System</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email(
+            to_emails, subject, body, attachments=attachments
+        )
 
 
 # Create a singleton instance

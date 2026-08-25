@@ -84,7 +84,36 @@ def create_loan(  loan_type: str = Form(...),
 
         )
 
-    # Create a new loan instance
+    # Read document bytes upfront (needed for both GCS and email attachments)
+    doc_files = [
+        ("id_document", id_document),
+        ("bank_statement", bank_statement),
+        ("proof_of_residence", proof_of_residence),
+    ]
+    doc_bytes = {}
+    for key, upload in doc_files:
+        upload.file.seek(0)
+        doc_bytes[key] = upload.file.read()
+        upload.file.seek(0)
+
+    # Try GCS uploads (best effort — don't crash loan creation if GCS fails)
+    id_path = None
+    bank_path = None
+    proof_path = None
+    try:
+        id_path = upload_to_gcs(id_document, "id_documents", user_id)
+    except Exception as e:
+        logging.warning("GCS upload failed for id_document: %s", e)
+    try:
+        bank_path = upload_to_gcs(bank_statement, "bank_statements", user_id)
+    except Exception as e:
+        logging.warning("GCS upload failed for bank_statement: %s", e)
+    try:
+        proof_path = upload_to_gcs(proof_of_residence, "residences", user_id)
+    except Exception as e:
+        logging.warning("GCS upload failed for proof_of_residence: %s", e)
+
+    # Create and save the loan
     new_loan = Loan(
         user_id=user_id,
         loan_type=loan_type,
@@ -95,20 +124,18 @@ def create_loan(  loan_type: str = Form(...),
         start_date=start_date,
         end_date=end_date,
         status="active",
-        id_path =upload_to_gcs(id_document, "id_documents",user_id),
-        bank_path=upload_to_gcs(bank_statement, "bank_statements",user_id), 
-        proof_of_residence_path = upload_to_gcs(proof_of_residence, "residences",user_id)
-
+        id_path=id_path,
+        bank_path=bank_path,
+        proof_of_residence_path=proof_path,
     )
-
-    # Add the loan to the database
     db.add(new_loan)
     db.commit()
     db.refresh(new_loan)
-    # Send application notification email (do not block on email failures)
+
+    borrower_name = f"{user.first_name} {user.last_name}".strip()
+
+    # 1. Send confirmation email to applicant
     try:
-        borrower_name = f"{user.first_name} {user.last_name}".strip()
-        # Best-effort send; log any failures
         email_service.send_loan_application_email(
             borrower_name=borrower_name,
             loan_id=new_loan.id,
@@ -116,7 +143,30 @@ def create_loan(  loan_type: str = Form(...),
             to_emails=[user.email] if getattr(user, 'email', None) else []
         )
     except Exception as e:
-        logging.error("Failed to send loan application email for loan %s: %s", new_loan.id, e)
+        logging.error("Failed to send confirmation email for loan %s: %s",
+                      new_loan.id, e)
+
+    # 2. Send application with documents to applicants@restoreloans.co.za
+    try:
+        attachments = [
+            (doc_bytes["id_document"], id_document.filename or "id_document"),
+            (doc_bytes["bank_statement"], bank_statement.filename or "bank_statement"),
+            (doc_bytes["proof_of_residence"], proof_of_residence.filename or "proof_of_residence"),
+        ]
+        email_service.send_application_with_docs_email(
+            borrower_name=borrower_name,
+            loan_id=new_loan.id,
+            amount=new_loan.loan_amount,
+            loan_type=loan_type,
+            interest_rate=_parse_interest_rate(interest_rate),
+            loan_term=loan_term,
+            to_emails=["applicants@restoreloans.co.za"],
+            attachments=attachments,
+        )
+    except Exception as e:
+        logging.error("Failed to send application email with docs for loan %s: %s",
+                      new_loan.id, e)
+
     return new_loan
 
 @router.get("/", response_model=list[LoanResponse], status_code=status.HTTP_200_OK)
