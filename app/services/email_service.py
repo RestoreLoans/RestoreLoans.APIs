@@ -41,6 +41,11 @@ class EmailService:
 
         if attachments:
             wrapper = MIMEMultipart("mixed")
+            wrapper["From"] = self.sender_email
+            wrapper["To"] = ", ".join(to_emails)
+            wrapper["Subject"] = subject
+            wrapper["Date"] = formatdate(localtime=True)
+            wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
             wrapper.attach(message)
             for file_bytes, filename in attachments:
                 part = MIMEBase("application", "octet-stream")
