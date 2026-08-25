@@ -45,3 +45,4 @@ venv/
 .github\instructions\snyk_rules.instructions.md
 
 app/utils/google.json
+dev_emails/
