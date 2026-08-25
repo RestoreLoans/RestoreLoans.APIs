@@ -47,7 +47,11 @@ class EmailService:
             message.attach(part)
 
         try:
-            if self.smtp_port == 465:
+            is_local = self.smtp_server in ("127.0.0.1", "localhost")
+            if is_local:
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.send_message(message)
+            elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
                 with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
                     server.login(self.sender_email, self.sender_password)
