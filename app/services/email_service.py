@@ -3,6 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders as mime_encoders
+from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
 import os
 from dotenv import load_dotenv
@@ -30,23 +31,26 @@ class EmailService:
         if not to_emails:
             raise Exception("No recipient emails provided")
 
-        msg_type = "mixed" if attachments else "alternative"
-        message = MIMEMultipart(msg_type)
+        content_type = "html" if is_html else "plain"
+        message = MIMEText(body, content_type, _charset="utf-8")
         message["From"] = self.sender_email
         message["To"] = ", ".join(to_emails)
         message["Subject"] = subject
+        message["Date"] = formatdate(localtime=True)
+        message["Message-ID"] = make_msgid(domain="restoreloans.co.za")
 
-        content_type = "html" if is_html else "plain"
-        message.attach(MIMEText(body, content_type))
-
-        for file_bytes, filename in (attachments or []):
-            part = MIMEBase("application", "octet-stream")
-            part.set_payload(file_bytes)
-            mime_encoders.encode_base64(part)
-            part.add_header(
-                "Content-Disposition", f'attachment; filename="{filename}"'
-            )
-            message.attach(part)
+        if attachments:
+            wrapper = MIMEMultipart("mixed")
+            wrapper.attach(message)
+            for file_bytes, filename in attachments:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(file_bytes)
+                mime_encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition", f'attachment; filename="{filename}"'
+                )
+                wrapper.attach(part)
+            message = wrapper
 
         try:
             is_local = self.smtp_server in ("127.0.0.1", "localhost")
@@ -55,15 +59,16 @@ class EmailService:
                     server.send_message(message)
             elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
-                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                    server.ehlo("restoreloans.co.za")
-                    server.login(self.smtp_username, self.smtp_password)
-                    server.send_message(message)
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, local_hostname="restoreloans.co.za")
+                server.ehlo("restoreloans.co.za")
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(message)
+                server.quit()
             else:
                 # STARTTLS (e.g. port 587)
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                    server.ehlo("restoreloans.co.za")
                     server.starttls()
+                    server.ehlo("restoreloans.co.za")
                     server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             return True
@@ -79,10 +84,9 @@ class EmailService:
         custom_message: Optional[str] = None,
     ):
         subject = "Loan Application Received"
-        is_html = True
         if custom_message:
             body = custom_message
-            is_html = not any(tag in custom_message.lower() for tag in ['<html', '<body', '<p', '<div', '<h2'])
+            is_html = any(tag in custom_message.lower() for tag in ['<html', '<body', '<p', '<div', '<h2'])
         else:
             body = "\n".join(
                 [
