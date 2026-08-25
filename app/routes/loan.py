@@ -19,7 +19,6 @@ router = APIRouter(
     tags=["Loans"]
 )
 BUCKET_NAME = "restoreloans"
-SERVICE_ACCOUNT_FILE = "app/utils/google_service_account.json"
 
 
 def _format_loan_id(loan_id: int) -> str:
