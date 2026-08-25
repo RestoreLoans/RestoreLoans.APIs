@@ -56,11 +56,13 @@ class EmailService:
             elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
                 with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
+                    server.ehlo("restoreloans.co.za")
                     server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             else:
                 # STARTTLS (e.g. port 587)
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.ehlo("restoreloans.co.za")
                     server.starttls()
                     server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
