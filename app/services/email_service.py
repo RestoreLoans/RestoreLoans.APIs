@@ -290,8 +290,45 @@ class EmailService:
         loan_term: int,
         to_emails: List[str],
         attachments: Optional[List[tuple]] = None,
+        user_details: Optional[dict] = None,
     ):
         subject = "New Loan Application"
+        details_lines = [
+            f"        <li>Borrower: {borrower_name}</li>",
+            f"        <li>Loan ID: #{loan_id}</li>",
+            f"        <li>Loan Type: {loan_type}</li>",
+            f"        <li>Amount: R {amount:,.2f}</li>",
+            f"        <li>Interest Rate: {interest_rate}%</li>",
+            f"        <li>Loan Term: {loan_term} months</li>",
+            "        <li>Status: Pending Review</li>",
+        ]
+        if user_details:
+            details_lines = [
+                f"        <li>Title: {user_details.get('title') or 'N/A'}</li>",
+                f"        <li>First Name: {user_details.get('first_name') or 'N/A'}</li>",
+                f"        <li>Last Name: {user_details.get('last_name') or 'N/A'}</li>",
+                f"        <li>ID Number: {user_details.get('id_number') or 'N/A'}</li>",
+                f"        <li>Email: {user_details.get('email') or 'N/A'}</li>",
+                f"        <li>Phone Number: {user_details.get('phone_number') or 'N/A'}</li>",
+                f"        <li>Gender: {user_details.get('gender') or 'N/A'}</li>",
+                f"        <li>Home Phone: {user_details.get('homephone') or 'N/A'}</li>",
+                f"        <li>Home Address: {user_details.get('home_add1') or 'N/A'}"
+                f"{' ' + str(user_details.get('home_add2')) if user_details.get('home_add2') else ''}</li>",
+                f"        <li>Suburb: {user_details.get('suburb') or 'N/A'}</li>",
+                f"        <li>Town: {user_details.get('town') or 'N/A'}</li>",
+                f"        <li>Postal Code: {user_details.get('postal_code') or 'N/A'}</li>",
+                f"        <li>Language: {user_details.get('language') or 'N/A'}</li>",
+                f"        <li>Date of Birth: {user_details.get('dob') or 'N/A'}</li>",
+                f"        <li>Nationality: {user_details.get('nationality', 'N/A')}</li>",
+            ] + [
+                "        <li>================ LOAN ================</li>",
+                f"        <li>Loan ID: #{loan_id}</li>",
+                f"        <li>Loan Type: {loan_type}</li>",
+                f"        <li>Amount: R {amount:,.2f}</li>",
+                f"        <li>Interest Rate: {interest_rate}%</li>",
+                f"        <li>Loan Term: {loan_term} months</li>",
+                "        <li>Status: Pending Review</li>",
+            ]
         body = "\n".join(
             [
                 "<html>",
@@ -304,13 +341,9 @@ class EmailService:
                 "border-radius: 5px; margin: 20px 0;\">",
                 "      <p><strong>Applicant Details:</strong></p>",
                 "      <ul>",
-                f"        <li>Borrower: {borrower_name}</li>",
-                f"        <li>Loan ID: #{loan_id}</li>",
-                f"        <li>Loan Type: {loan_type}</li>",
-                f"        <li>Amount: R {amount:,.2f}</li>",
-                f"        <li>Interest Rate: {interest_rate}%</li>",
-                f"        <li>Loan Term: {loan_term} months</li>",
-                "        <li>Status: Pending Review</li>",
+            ]
+            + details_lines
+            + [
                 "      </ul>",
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
