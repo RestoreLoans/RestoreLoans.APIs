@@ -6,13 +6,21 @@ from email import encoders as mime_encoders
 from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
 import os
+import re
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+ENV_PATH = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(dotenv_path=ENV_PATH)
 
 
 class EmailService:
     def __init__(self):
+        self._reload_env()
+
+    def _reload_env(self):
+        # Re-read the .env file on every reload so edits are picked up
+        # without restarting the server (uvicorn --reload only watches .py).
+        load_dotenv(dotenv_path=ENV_PATH, override=True)
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.sender_email = os.getenv("SENDER_EMAIL")
@@ -31,22 +39,31 @@ class EmailService:
         if not to_emails:
             raise Exception("No recipient emails provided")
 
-        content_type = "html" if is_html else "plain"
-        message = MIMEText(body, content_type, _charset="utf-8")
+        self._reload_env()
+
+        if is_html:
+            html_body = body
+            plain_body = re.sub(r"<[^>]+>", " ", body)
+            plain_body = re.sub(r"\s+", " ", plain_body).strip()
+        else:
+            html_body = None
+            plain_body = body
+
+        alternative = MIMEMultipart("alternative")
+        alternative.attach(MIMEText(plain_body, "plain", _charset="utf-8"))
+        if html_body:
+            alternative.attach(MIMEText(html_body, "html", _charset="utf-8"))
+
+        message = MIMEMultipart("mixed")
         message["From"] = self.sender_email
         message["To"] = ", ".join(to_emails)
         message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
         message["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+        message["X-Mailer"] = "RestoreLoans"
+        message.attach(alternative)
 
         if attachments:
-            wrapper = MIMEMultipart("mixed")
-            wrapper["From"] = self.sender_email
-            wrapper["To"] = ", ".join(to_emails)
-            wrapper["Subject"] = subject
-            wrapper["Date"] = formatdate(localtime=True)
-            wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-            wrapper.attach(message)
             for file_bytes, filename in attachments:
                 part = MIMEBase("application", "octet-stream")
                 part.set_payload(file_bytes)
@@ -54,8 +71,7 @@ class EmailService:
                 part.add_header(
                     "Content-Disposition", f'attachment; filename="{filename}"'
                 )
-                wrapper.attach(part)
-            message = wrapper
+                message.attach(part)
 
         try:
             is_local = self.smtp_server in ("127.0.0.1", "localhost")
