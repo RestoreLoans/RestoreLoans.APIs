@@ -260,20 +260,6 @@ def send_application_docs_email(
                 logging.warning("Could not download %s from %s: %s", label, url, exc)
 
     loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
-    from app.models.user import User
-    from app.models.company import Company
-    from app.models.bank import BankDetail
-    from app.services.email_service import (
-        client_details_from_user,
-        employer_details_from_company,
-        bank_details_from_bank,
-    )
-    user = db.query(User).filter(User.id == txn.user_id).first()
-    company = db.query(Company).filter(Company.id == user.company_id).first() if user and user.company_id else None
-    bank = db.query(BankDetail).filter(BankDetail.id == user.bank_id).first() if user and user.bank_id else None
-    client_details = client_details_from_user(user)
-    employer_details = employer_details_from_company(company)
-    bank_details = bank_details_from_bank(bank)
     try:
         email_service.send_application_with_docs_email(
             borrower_name=txn.borrower,
@@ -284,9 +270,6 @@ def send_application_docs_email(
             loan_term=loan.loan_term or 0,
             to_emails=["applicants@restoreloans.co.za"],
             attachments=attachments or None,
-            client_details=client_details,
-            employer_details=employer_details,
-            bank_details=bank_details,
         )
     except Exception as exc:
         raise HTTPException(

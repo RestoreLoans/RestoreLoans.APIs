@@ -6,21 +6,13 @@ from email import encoders as mime_encoders
 from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
 import os
-import re
 from dotenv import load_dotenv
 
-ENV_PATH = os.path.join(os.path.dirname(__file__), "..", ".env")
-load_dotenv(dotenv_path=ENV_PATH)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
 class EmailService:
     def __init__(self):
-        self._reload_env()
-
-    def _reload_env(self):
-        # Re-read the .env file on every reload so edits are picked up
-        # without restarting the server (uvicorn --reload only watches .py).
-        load_dotenv(dotenv_path=ENV_PATH, override=True)
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.sender_email = os.getenv("SENDER_EMAIL")
@@ -39,31 +31,22 @@ class EmailService:
         if not to_emails:
             raise Exception("No recipient emails provided")
 
-        self._reload_env()
-
-        if is_html:
-            html_body = body
-            plain_body = re.sub(r"<[^>]+>", " ", body)
-            plain_body = re.sub(r"\s+", " ", plain_body).strip()
-        else:
-            html_body = None
-            plain_body = body
-
-        alternative = MIMEMultipart("alternative")
-        alternative.attach(MIMEText(plain_body, "plain", _charset="utf-8"))
-        if html_body:
-            alternative.attach(MIMEText(html_body, "html", _charset="utf-8"))
-
-        message = MIMEMultipart("mixed")
+        content_type = "html" if is_html else "plain"
+        message = MIMEText(body, content_type, _charset="utf-8")
         message["From"] = self.sender_email
         message["To"] = ", ".join(to_emails)
         message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
         message["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-        message["X-Mailer"] = "RestoreLoans"
-        message.attach(alternative)
 
         if attachments:
+            wrapper = MIMEMultipart("mixed")
+            wrapper["From"] = self.sender_email
+            wrapper["To"] = ", ".join(to_emails)
+            wrapper["Subject"] = subject
+            wrapper["Date"] = formatdate(localtime=True)
+            wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+            wrapper.attach(message)
             for file_bytes, filename in attachments:
                 part = MIMEBase("application", "octet-stream")
                 part.set_payload(file_bytes)
@@ -71,7 +54,8 @@ class EmailService:
                 part.add_header(
                     "Content-Disposition", f'attachment; filename="{filename}"'
                 )
-                message.attach(part)
+                wrapper.attach(part)
+            message = wrapper
 
         try:
             is_local = self.smtp_server in ("127.0.0.1", "localhost")
@@ -306,184 +290,41 @@ class EmailService:
         loan_term: int,
         to_emails: List[str],
         attachments: Optional[List[tuple]] = None,
-        client_details: Optional[dict] = None,
-        employer_details: Optional[dict] = None,
-        bank_details: Optional[dict] = None,
     ):
         subject = "New Loan Application"
-
-        def _li(label, value):
-            return (
-                f"        <li>{label}: "
-                f"{value if value is not None and str(value).strip() != '' else 'N/A'}</li>"
-            )
-
-        blocks = []
-
-        client_map = [
-            ("Title", "title"),
-            ("First Name", "first_name"),
-            ("Last Name", "last_name"),
-            ("ID Number", "id_number"),
-            ("Email", "email"),
-            ("Cellphone Number", "phone_number"),
-            ("Home Phone", "homephone"),
-            ("Home Address", "home_add1"),
-            ("Home Address 2", "home_add2"),
-            ("Suburb", "suburb"),
-            ("Town", "town"),
-            ("Postal Code", "postal_code"),
-            ("Language", "language"),
-            ("Date of Birth", "dob"),
-            ("Nationality", "nationality"),
-            ("Gender", "gender"),
-        ]
-        if client_details:
-            blocks.append(
-                ("CLIENT DETAILS",
-                 [_li(label, client_details.get(key)) for label, key in client_map])
-            )
-
-        employer_map = [
-            ("Company Name", "name"),
-            ("Type", "type"),
-            ("Pay Day Date", "pay_day_date"),
-            ("Address 1", "address1"),
-            ("Address 2", "address2"),
-            ("Town", "town"),
-            ("Suburb", "suburb"),
-            ("Postal Code", "post_code"),
-            ("Phone", "phone"),
-            ("Appointed On", "appointed_on_date"),
-            ("Pay Date Shift", "pay_date_shift"),
-            ("Contact Method", "contact_method"),
-            ("Salary Frequency", "salary_freq"),
-            ("Pay Method", "pay_method"),
-            ("Pay Day of Week", "pay_day_of_week"),
-            ("Contract End Date", "contract_end_date"),
-        ]
-        if employer_details:
-            blocks.append(
-                ("EMPLOYER DETAILS",
-                 [_li(label, employer_details.get(key)) for label, key in employer_map])
-            )
-
-        bank_map = [
-            ("Bank Name", "bank_name"),
-            ("Branch Name", "branch_name"),
-            ("Branch Code", "branch_code"),
-            ("Account Holder", "account_holder_name"),
-            ("Account Number", "account_number"),
-            ("Account Type", "account_type"),
-        ]
-        if bank_details:
-            blocks.append(
-                ("BANK DETAILS",
-                 [_li(label, bank_details.get(key)) for label, key in bank_map])
-            )
-
-        blocks.append(
-            ("LOAN DETAILS",
-             [
-                 _li("Loan ID", f"#{loan_id}"),
-                 _li("Loan Type", loan_type),
-                 _li("Amount", f"R {amount:,.2f}"),
-                 _li("Interest Rate", f"{interest_rate}%"),
-                 _li("Loan Term", f"{loan_term} months"),
-                 _li("Status", "Pending Review"),
-             ])
-        )
-
-        html_parts = [
-            "<html>",
-            "  <body style=\"font-family: Arial, sans-serif; "
-            "padding: 20px;\">",
-            "    <h2 style=\"color: #2c3e50;\">New Loan Application</h2>",
-            "    <p>A new loan application has been submitted and "
-            "requires review.</p>",
-        ]
-        for heading, rows in blocks:
-            html_parts.append(
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "padding: 20px;\">",
+                "    <h2 style=\"color: #2c3e50;\">New Loan Application</h2>",
+                f"    <p>A new loan application has been submitted and "
+                f"requires review.</p>",
                 "    <div style=\"background-color: #f8f9fa; padding: 15px; "
-                "border-radius: 5px; margin: 20px 0;\">"
-            )
-            html_parts.append(f"      <p><strong>{heading}:</strong></p>")
-            html_parts.append("      <ul>")
-            html_parts.extend(rows)
-            html_parts.append("      </ul>")
-            html_parts.append("    </div>")
-        html_parts.append(
-            "    <p>Supporting documents (ID, bank statement, "
-            "proof of residence) are attached to this email.</p>"
+                "border-radius: 5px; margin: 20px 0;\">",
+                "      <p><strong>Applicant Details:</strong></p>",
+                "      <ul>",
+                f"        <li>Borrower: {borrower_name}</li>",
+                f"        <li>Loan ID: #{loan_id}</li>",
+                f"        <li>Loan Type: {loan_type}</li>",
+                f"        <li>Amount: R {amount:,.2f}</li>",
+                f"        <li>Interest Rate: {interest_rate}%</li>",
+                f"        <li>Loan Term: {loan_term} months</li>",
+                "        <li>Status: Pending Review</li>",
+                "      </ul>",
+                "    </div>",
+                "    <p>Supporting documents (ID, bank statement, "
+                "proof of residence) are attached to this email.</p>",
+                "    <br>",
+                "    <p>Best regards,<br><strong>"
+                "RestoreLoans System</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
         )
-        html_parts.append("    <br>")
-        html_parts.append("    <p>Best regards,<br><strong>"
-                         "RestoreLoans System</strong></p>")
-        html_parts.append("  </body>")
-        html_parts.append("</html>")
-        body = "\n".join(html_parts)
         return self.send_email(
             to_emails, subject, body, attachments=attachments
         )
-
-
-def client_details_from_user(user):
-    if user is None:
-        return None
-    return {
-        "title": user.title,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "id_number": user.id_number,
-        "email": user.email,
-        "phone_number": user.phone_number,
-        "homephone": user.homephone,
-        "home_add1": user.home_add1,
-        "home_add2": user.home_add2,
-        "suburb": user.suburb,
-        "town": user.town,
-        "postal_code": user.postal_code,
-        "language": user.language,
-        "dob": user.dob.isoformat() if user.dob else None,
-        "nationality": user.nationality,
-        "gender": user.gender.value if hasattr(user.gender, "value") else user.gender,
-    }
-
-
-def employer_details_from_company(company):
-    if company is None:
-        return None
-    return {
-        "name": company.name,
-        "type": company.type,
-        "pay_day_date": company.pay_day_date.isoformat() if company.pay_day_date else None,
-        "address1": company.address1,
-        "address2": company.address2,
-        "town": company.town,
-        "suburb": company.suburb,
-        "post_code": company.post_code,
-        "phone": company.phone,
-        "appointed_on_date": company.appointed_on_date.isoformat() if company.appointed_on_date else None,
-        "pay_date_shift": company.pay_date_shift,
-        "contact_method": company.contact_method,
-        "salary_freq": company.salary_freq,
-        "pay_method": company.pay_method,
-        "pay_day_of_week": company.pay_day_of_week,
-        "contract_end_date": company.contract_end_date.isoformat() if company.contract_end_date else None,
-    }
-
-
-def bank_details_from_bank(bank):
-    if bank is None:
-        return None
-    return {
-        "bank_name": bank.bank_name,
-        "branch_name": bank.branch_name,
-        "branch_code": bank.branch_code,
-        "account_holder_name": bank.account_holder_name,
-        "account_number": bank.account_number,
-        "account_type": bank.account_type.value if hasattr(bank.account_type, "value") else bank.account_type,
-    }
 
 
 # Create a singleton instance
