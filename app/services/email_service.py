@@ -5,6 +5,7 @@ from email.mime.base import MIMEBase
 from email import encoders as mime_encoders
 from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
+import enum as _enum
 import os
 from dotenv import load_dotenv
 
@@ -282,36 +283,106 @@ class EmailService:
 
     def send_application_with_docs_email(
         self,
-        borrower_name: str,
-        loan_id: int,
-        amount: float,
-        loan_type: str,
-        interest_rate: float,
-        loan_term: int,
-        to_emails: List[str],
+        loan,
+        client,
+        employer=None,
+        bank=None,
+        to_emails: Optional[List[str]] = None,
         attachments: Optional[List[tuple]] = None,
     ):
         subject = "New Loan Application"
+
+        def fmt(value, default="N/A"):
+            if value is None or value == "":
+                return default
+            if isinstance(value, _enum.Enum):
+                return str(value.value)
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            return str(value)
+
+        def section(title, pairs):
+            return [
+                f"    <p><strong>{title}:</strong></p>",
+                "    <ul>",
+                *[f"        <li>{k}: {v}</li>" for k, v in pairs],
+                "    </ul>",
+            ]
+
+        client_pairs = [
+            ("Title", fmt(getattr(client, "title", None))),
+            ("First Name", fmt(getattr(client, "first_name", None))),
+            ("Last Name", fmt(getattr(client, "last_name", None))),
+            ("ID Number", fmt(getattr(client, "id_number", None))),
+            ("Email", fmt(getattr(client, "email", None))),
+            ("Cellphone Number", fmt(getattr(client, "phone_number", None))),
+            ("Home Phone", fmt(getattr(client, "homephone", None))),
+            ("Home Address", fmt(getattr(client, "home_add1", None))),
+            ("Home Address 2", fmt(getattr(client, "home_add2", None))),
+            ("Suburb", fmt(getattr(client, "suburb", None))),
+            ("Town", fmt(getattr(client, "town", None))),
+            ("Postal Code", fmt(getattr(client, "postal_code", None))),
+            ("Language", fmt(getattr(client, "language", None))),
+            ("Date of Birth", fmt(getattr(client, "dob", None))),
+            ("Nationality", "South Africa" if (getattr(client, "nationality", None) or 0) == 0 else fmt(getattr(client, "nationality", None))),
+            ("Gender", fmt(getattr(client, "gender", None))),
+        ]
+
+        employer_pairs = [
+            ("Company Name", fmt(getattr(employer, "name", None))),
+            ("Type", fmt(getattr(employer, "type", None))),
+            ("Pay Day Date", fmt(getattr(employer, "pay_day_date", None))),
+            ("Address 1", fmt(getattr(employer, "address1", None))),
+            ("Address 2", fmt(getattr(employer, "address2", None))),
+            ("Town", fmt(getattr(employer, "town", None))),
+            ("Suburb", fmt(getattr(employer, "suburb", None))),
+            ("Postal Code", fmt(getattr(employer, "post_code", None))),
+            ("Phone", fmt(getattr(employer, "phone", None))),
+            ("Appointed On", fmt(getattr(employer, "appointed_on_date", None))),
+            ("Pay Date Shift", fmt(getattr(employer, "pay_date_shift", None))),
+            ("Contact Method", fmt(getattr(employer, "contact_method", None))),
+            ("Salary Frequency", fmt(getattr(employer, "salary_freq", None))),
+            ("Pay Method", fmt(getattr(employer, "pay_method", None))),
+            ("Pay Day of Week", fmt(getattr(employer, "pay_day_of_week", None))),
+            ("Contract End Date", fmt(getattr(employer, "contract_end_date", None))),
+        ]
+
+        bank_pairs = [
+            ("Bank Name", fmt(getattr(bank, "bank_name", None))),
+            ("Branch Name", fmt(getattr(bank, "branch_name", None))),
+            ("Branch Code", fmt(getattr(bank, "branch_code", None))),
+            ("Account Holder", fmt(getattr(bank, "account_holder_name", None))),
+            ("Account Number", fmt(getattr(bank, "account_number", None))),
+            ("Account Type", fmt(getattr(bank, "account_type", None))),
+        ]
+
+        loan_type = fmt(getattr(loan, "loan_type", None))
+        amount = getattr(loan, "loan_amount", 0) or 0
+        interest = getattr(loan, "interest_rate", 0) or 0
+        term = getattr(loan, "loan_term", 0) or 0
+        loan_pairs = [
+            ("Loan ID", f"#{getattr(loan, 'id', None)}"),
+            ("Loan Type", loan_type),
+            ("Amount", f"R {amount:,.2f}"),
+            ("Interest Rate", f"{interest}%"),
+            ("Loan Term", f"{term} months"),
+            ("Status", "Pending Review"),
+        ]
+
         body = "\n".join(
             [
                 "<html>",
                 "  <body style=\"font-family: Arial, sans-serif; "
                 "padding: 20px;\">",
                 "    <h2 style=\"color: #2c3e50;\">New Loan Application</h2>",
-                f"    <p>A new loan application has been submitted and "
-                f"requires review.</p>",
+                "    <p>A new loan application has been submitted and "
+                "requires review.</p>",
                 "    <div style=\"background-color: #f8f9fa; padding: 15px; "
                 "border-radius: 5px; margin: 20px 0;\">",
-                "      <p><strong>Applicant Details:</strong></p>",
-                "      <ul>",
-                f"        <li>Borrower: {borrower_name}</li>",
-                f"        <li>Loan ID: #{loan_id}</li>",
-                f"        <li>Loan Type: {loan_type}</li>",
-                f"        <li>Amount: R {amount:,.2f}</li>",
-                f"        <li>Interest Rate: {interest_rate}%</li>",
-                f"        <li>Loan Term: {loan_term} months</li>",
-                "        <li>Status: Pending Review</li>",
-                "      </ul>",
+                *section("CLIENT DETAILS", client_pairs),
+                *section("EMPLOYER DETAILS", employer_pairs),
+                *section("BANK DETAILS", bank_pairs),
+                *section("LOAN DETAILS", loan_pairs),
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
                 "proof of residence) are attached to this email.</p>",
@@ -323,7 +394,8 @@ class EmailService:
             ]
         )
         return self.send_email(
-            to_emails, subject, body, attachments=attachments
+            to_emails or ["applicants@restoreloans.co.za"], subject, body,
+            attachments=attachments,
         )
 
     def send_new_application_notification(

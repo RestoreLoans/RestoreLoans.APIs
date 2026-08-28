@@ -147,12 +147,10 @@ def create_loan(  loan_type: str = Form(...),
             (doc_bytes["proof_of_residence"], proof_of_residence.filename or "proof_of_residence"),
         ]
         email_service.send_application_with_docs_email(
-            borrower_name=borrower_name,
-            loan_id=new_loan.id,
-            amount=new_loan.loan_amount,
-            loan_type=loan_type,
-            interest_rate=_parse_interest_rate(interest_rate),
-            loan_term=loan_term,
+            loan=new_loan,
+            client=user,
+            employer=getattr(user, "company", None),
+            bank=getattr(user, "bank", None),
             to_emails=["applicants@restoreloans.co.za"],
             attachments=attachments,
         )
