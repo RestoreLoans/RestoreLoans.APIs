@@ -10,7 +10,12 @@ from google.cloud import storage
 import os
 from datetime import datetime
 import logging
-from app.services.email_service import email_service
+from app.services.email_service import (
+    email_service,
+    client_details_from_user,
+    employer_details_from_company,
+    bank_details_from_bank,
+)
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "app/utils/google.json"
@@ -134,6 +139,11 @@ def create_loan(  loan_type: str = Form(...),
 
     borrower_name = f"{user.first_name} {user.last_name}".strip()
 
+    from app.models.company import Company
+    from app.models.bank import BankDetail
+    company = db.query(Company).filter(Company.id == user.company_id).first() if user.company_id else None
+    bank = db.query(BankDetail).filter(BankDetail.id == user.bank_id).first() if user.bank_id else None
+
     # 1. Ack email with personalized message is sent by the frontend after loan
     #    creation (via send-loan-email with custom_message).
 
@@ -155,24 +165,9 @@ def create_loan(  loan_type: str = Form(...),
             loan_term=loan_term,
             to_emails=["applicants@restoreloans.co.za"],
             attachments=attachments,
-            user_details={
-                "title": user.title,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "id_number": user.id_number,
-                "email": user.email,
-                "phone_number": user.phone_number,
-                "gender": user.gender.value if hasattr(user.gender, "value") else user.gender,
-                "homephone": user.homephone,
-                "home_add1": user.home_add1,
-                "home_add2": user.home_add2,
-                "suburb": user.suburb,
-                "town": user.town,
-                "postal_code": user.postal_code,
-                "language": user.language,
-                "dob": user.dob.isoformat() if user.dob else None,
-                "nationality": user.nationality,
-            },
+            client_details=client_details_from_user(user),
+            employer_details=employer_details_from_company(company),
+            bank_details=bank_details_from_bank(bank),
         )
     except Exception as e:
         logging.error("Failed to send application email with docs for loan %s: %s",

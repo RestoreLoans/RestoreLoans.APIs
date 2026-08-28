@@ -260,29 +260,20 @@ def send_application_docs_email(
                 logging.warning("Could not download %s from %s: %s", label, url, exc)
 
     loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
-    user = None
     from app.models.user import User
+    from app.models.company import Company
+    from app.models.bank import BankDetail
+    from app.services.email_service import (
+        client_details_from_user,
+        employer_details_from_company,
+        bank_details_from_bank,
+    )
     user = db.query(User).filter(User.id == txn.user_id).first()
-    user_details = None
-    if user:
-        user_details = {
-            "title": user.title,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "id_number": user.id_number,
-            "email": user.email,
-            "phone_number": user.phone_number,
-            "gender": user.gender.value if hasattr(user.gender, "value") else user.gender,
-            "homephone": user.homephone,
-            "home_add1": user.home_add1,
-            "home_add2": user.home_add2,
-            "suburb": user.suburb,
-            "town": user.town,
-            "postal_code": user.postal_code,
-            "language": user.language,
-            "dob": user.dob.isoformat() if user.dob else None,
-            "nationality": user.nationality,
-        }
+    company = db.query(Company).filter(Company.id == user.company_id).first() if user and user.company_id else None
+    bank = db.query(BankDetail).filter(BankDetail.id == user.bank_id).first() if user and user.bank_id else None
+    client_details = client_details_from_user(user)
+    employer_details = employer_details_from_company(company)
+    bank_details = bank_details_from_bank(bank)
     try:
         email_service.send_application_with_docs_email(
             borrower_name=txn.borrower,
@@ -293,7 +284,9 @@ def send_application_docs_email(
             loan_term=loan.loan_term or 0,
             to_emails=["applicants@restoreloans.co.za"],
             attachments=attachments or None,
-            user_details=user_details,
+            client_details=client_details,
+            employer_details=employer_details,
+            bank_details=bank_details,
         )
     except Exception as exc:
         raise HTTPException(
