@@ -326,6 +326,47 @@ class EmailService:
             to_emails, subject, body, attachments=attachments
         )
 
+    def send_new_application_notification(
+        self,
+        applicant_name: str,
+        applicant_phone: str,
+        applicant_email: str,
+        id_number: str = "",
+        employer_name: str = "",
+        to_emails: Optional[List[str]] = None,
+    ):
+        subject = "New Application"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "padding: 20px;\">",
+                "    <h2 style=\"color: #2c3e50;\">New Application</h2>",
+                "    <p>A new client has registered and requires review.</p>",
+                "    <div style=\"background-color: #f8f9fa; padding: 15px; "
+                "border-radius: 5px; margin: 20px 0;\">",
+                "      <p><strong>Applicant Details:</strong></p>",
+                "      <ul>",
+                f"        <li>Name: {applicant_name}</li>",
+                f"        <li>Phone: {applicant_phone}</li>",
+                f"        <li>Email: {applicant_email}</li>",
+                f"        <li>ID Number: {id_number}</li>",
+                f"        <li>Employer: {employer_name}</li>",
+                "        <li>Status: Pending Application</li>",
+                "      </ul>",
+                "    </div>",
+                "    <p>Please log in to review the new application.</p>",
+                "    <br>",
+                "    <p>Best regards,<br><strong>"
+                "RestoreLoans System</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email(
+            to_emails or ["applicants@restoreloans.co.za"], subject, body
+        )
+
 
 # Create a singleton instance
 email_service = EmailService()
