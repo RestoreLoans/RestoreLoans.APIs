@@ -18,6 +18,8 @@ import hashlib
 import string
 from app.schemas.user import UserResponse
 from app.schemas.userRoles import UserRoleResponse
+from app.services.email_service import email_service
+import logging
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -160,6 +162,18 @@ class AuthService:
         db_user.company_id = db_company.id
         db_user.bank_id = db_bank.id
         db.commit()
+
+        # Send new application notification to staff mailbox
+        try:
+            email_service.send_new_application_notification(
+                applicant_name=f"{client.name} {client.surname}".strip(),
+                applicant_phone=client.cellphoneNumber,
+                applicant_email=client.email,
+                id_number=client.idNumber,
+                employer_name=(employer.name or ""),
+            )
+        except Exception as e:
+            logging.error("Failed to send new application notification: %s", e)
 
         return db_user
 

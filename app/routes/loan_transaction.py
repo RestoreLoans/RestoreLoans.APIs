@@ -18,6 +18,7 @@ from app.schemas.loan_transaction import (
     LoanTransactionUpdateStatus,
 )
 from app.models.loan_transaction import LoanTransaction
+from app.models.user import User
 from datetime import datetime, timezone
 from typing import Optional, List
 from app.models.transaction import Transaction
@@ -260,14 +261,13 @@ def send_application_docs_email(
                 logging.warning("Could not download %s from %s: %s", label, url, exc)
 
     loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
+    client = db.query(User).filter(User.id == loan.user_id).first()
     try:
         email_service.send_application_with_docs_email(
-            borrower_name=txn.borrower,
-            loan_id=txn.loan_id,
-            amount=txn.loan_amount,
-            loan_type=loan_type_str,
-            interest_rate=loan.interest_rate or 0,
-            loan_term=loan.loan_term or 0,
+            loan=loan,
+            client=client,
+            employer=getattr(client, "company", None) if client else None,
+            bank=getattr(client, "bank", None) if client else None,
             to_emails=["applicants@restoreloans.co.za"],
             attachments=attachments or None,
         )

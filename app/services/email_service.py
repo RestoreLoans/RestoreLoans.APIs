@@ -3,7 +3,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders as mime_encoders
+from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
+import enum as _enum
 import os
 from dotenv import load_dotenv
 
@@ -11,6 +13,12 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
 class EmailService:
+    def _from_header(self, sender_email):
+        name = os.getenv("SENDER_NAME")
+        if name:
+            return f"{name} <{sender_email}>"
+        return sender_email
+
     def __init__(self):
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -18,6 +26,20 @@ class EmailService:
         self.sender_password = os.getenv("SENDER_PASSWORD")
         self.smtp_username = os.getenv("SMTP_USERNAME", self.sender_email)
         self.smtp_password = os.getenv("SMTP_PASSWORD", self.sender_password)
+        # Track loan ids for which the "New Loan Application" email has
+        # already been sent, to avoid duplicate emails (e.g. when both the
+        # create_loan auto-send and the manual docs endpoint fire for the
+        # same loan).
+        self._new_application_sent = set()
+        # Track loan ids for which the "Loan Application Received"
+        # acknowledgement email has already been sent, to avoid duplicates
+        # (e.g. when both the create_loan auto-send and the manual
+        # send-loan-email endpoint fire for the same loan).
+        self._loan_ack_sent = set()
+
+    @property
+    def sender_header(self):
+        return self._from_header(self.sender_email)
 
     def send_email(
         self,
@@ -30,23 +52,31 @@ class EmailService:
         if not to_emails:
             raise Exception("No recipient emails provided")
 
-        msg_type = "mixed" if attachments else "alternative"
-        message = MIMEMultipart(msg_type)
-        message["From"] = self.sender_email
+        content_type = "html" if is_html else "plain"
+        message = MIMEText(body, content_type, _charset="utf-8")
+        message["From"] = self.sender_header
         message["To"] = ", ".join(to_emails)
         message["Subject"] = subject
+        message["Date"] = formatdate(localtime=True)
+        message["Message-ID"] = make_msgid(domain="restoreloans.co.za")
 
-        content_type = "html" if is_html else "plain"
-        message.attach(MIMEText(body, content_type))
-
-        for file_bytes, filename in (attachments or []):
-            part = MIMEBase("application", "octet-stream")
-            part.set_payload(file_bytes)
-            mime_encoders.encode_base64(part)
-            part.add_header(
-                "Content-Disposition", f'attachment; filename="{filename}"'
-            )
-            message.attach(part)
+        if attachments:
+            wrapper = MIMEMultipart("mixed")
+            wrapper["From"] = self.sender_header
+            wrapper["To"] = ", ".join(to_emails)
+            wrapper["Subject"] = subject
+            wrapper["Date"] = formatdate(localtime=True)
+            wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+            wrapper.attach(message)
+            for file_bytes, filename in attachments:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(file_bytes)
+                mime_encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition", f'attachment; filename="{filename}"'
+                )
+                wrapper.attach(part)
+            message = wrapper
 
         try:
             is_local = self.smtp_server in ("127.0.0.1", "localhost")
@@ -55,15 +85,16 @@ class EmailService:
                     server.send_message(message)
             elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
-                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                    server.ehlo("restoreloans.co.za")
-                    server.login(self.smtp_username, self.smtp_password)
-                    server.send_message(message)
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, local_hostname="restoreloans.co.za")
+                server.ehlo("restoreloans.co.za")
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(message)
+                server.quit()
             else:
                 # STARTTLS (e.g. port 587)
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                    server.ehlo("restoreloans.co.za")
                     server.starttls()
+                    server.ehlo("restoreloans.co.za")
                     server.login(self.smtp_username, self.smtp_password)
                     server.send_message(message)
             return True
@@ -77,41 +108,48 @@ class EmailService:
         amount: float,
         to_emails: List[str],
         custom_message: Optional[str] = None,
+        client=None,
+        employer=None,
+        bank=None,
+        loan=None,
+        force: bool = False,
     ):
+        # Avoid duplicate "Loan Application Received" emails for the same loan.
+        if not force and loan_id is not None and loan_id in self._loan_ack_sent:
+            return True
+
         subject = "Loan Application Received"
         is_html = True
         if custom_message:
             body = custom_message
-            is_html = not any(tag in custom_message.lower() for tag in ['<html', '<body', '<p', '<div', '<h2'])
+            is_html = any(tag in custom_message.lower() for tag in ['<html', '<body', '<p', '<div', '<h2'])
         else:
             body = "\n".join(
                 [
                     "<html>",
                     "  <body style=\"font-family: Arial, sans-serif; "
-                    "padding: 20px;\">",
-                    "    <h2 style=\"color: #2c3e50;\">"
-                    "Loan Application Received</h2>",
-                    f"    <p>Dear {borrower_name},</p>",
-                    "    <p>We have successfully received your loan",
-                    "    application.</p>",
-                    "    <div style=\"background-color: #f8f9fa; padding: 15px; "
-                    "border-radius: 5px; margin: 20px 0;\">",
-                    "      <p><strong>Application Details:</strong></p>",
-                    "      <ul>",
-                    f"        <li>Loan ID: #{loan_id}</li>",
-                    f"        <li>Amount: R{amount:,.2f}</li>",
-                    "        <li>Status: Pending Review</li>",
-                    "      </ul>",
-                    "    </div>",
-                    "    <p>Our team will review your application and contact",
-                    "    you shortly.</p>",
-                    "    <br>",
-                    "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
+                    "line-height: 1.6; padding: 20px;\">",
+                    f"    <p>Good day {borrower_name},</p>",
+                    "",
+                    "    <p>This message serves to acknowledge receipt of your "
+                    "loan application. Our team is currently reviewing the "
+                    "details provided.</p>",
+                    "",
+                    "    <p>If any further documentation or clarification is "
+                    "needed, we will reach out to you promptly.</p>",
+                    "",
+                    "    <p>Thank you for choosing Restore Loans. We will keep "
+                    "you informed throughout the process.</p>",
+                    "",
+                    "    <p>Warm regards,<br><strong>Restore Loans</strong></p>",
                     "  </body>",
                     "</html>",
-            ]
-        )
-        return self.send_email(to_emails, subject, body, is_html=is_html)
+                ]
+            )
+        result = self.send_email(to_emails, subject, body, is_html=is_html)
+        if loan_id is not None:
+            self._loan_ack_sent.add(loan_id)
+        return result
 
     def send_loan_approval_email(
         self,
@@ -270,38 +308,124 @@ class EmailService:
         )
         return self.send_email(to_emails, subject, body)
 
+    def _build_details_html(self, client, employer, bank, loan):
+        """Build the full CLIENT/EMPLOYER/BANK/LOAN details HTML block.
+
+        Returns a list of lines to be joined and spliced into an email body.
+        """
+
+        def fmt(value, default="N/A"):
+            if value is None or value == "":
+                return default
+            if isinstance(value, _enum.Enum):
+                return str(value.value)
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            return str(value)
+
+        def section(title, pairs):
+            return [
+                f"    <p><strong>{title}:</strong></p>",
+                "    <ul>",
+                *[f"        <li>{k}: {v}</li>" for k, v in pairs],
+                "    </ul>",
+            ]
+
+        client_pairs = [
+            ("Title", fmt(getattr(client, "title", None))),
+            ("First Name", fmt(getattr(client, "first_name", None))),
+            ("Last Name", fmt(getattr(client, "last_name", None))),
+            ("ID Number", fmt(getattr(client, "id_number", None))),
+            ("Email", fmt(getattr(client, "email", None))),
+            ("Cellphone Number", fmt(getattr(client, "phone_number", None))),
+            ("Home Phone", fmt(getattr(client, "homephone", None))),
+            ("Home Address", fmt(getattr(client, "home_add1", None))),
+            ("Home Address 2", fmt(getattr(client, "home_add2", None))),
+            ("Suburb", fmt(getattr(client, "suburb", None))),
+            ("Town", fmt(getattr(client, "town", None))),
+            ("Postal Code", fmt(getattr(client, "postal_code", None))),
+            ("Language", fmt(getattr(client, "language", None))),
+            ("Date of Birth", fmt(getattr(client, "dob", None))),
+            ("Nationality", "South Africa" if (getattr(client, "nationality", None) or 0) == 0 else fmt(getattr(client, "nationality", None))),
+            ("Gender", fmt(getattr(client, "gender", None))),
+        ]
+
+        employer_pairs = [
+            ("Company Name", fmt(getattr(employer, "name", None))),
+            ("Type", fmt(getattr(employer, "type", None))),
+            ("Pay Day Date", fmt(getattr(employer, "pay_day_date", None))),
+            ("Address 1", fmt(getattr(employer, "address1", None))),
+            ("Address 2", fmt(getattr(employer, "address2", None))),
+            ("Town", fmt(getattr(employer, "town", None))),
+            ("Suburb", fmt(getattr(employer, "suburb", None))),
+            ("Postal Code", fmt(getattr(employer, "post_code", None))),
+            ("Phone", fmt(getattr(employer, "phone", None))),
+            ("Appointed On", fmt(getattr(employer, "appointed_on_date", None))),
+            ("Pay Date Shift", fmt(getattr(employer, "pay_date_shift", None))),
+            ("Contact Method", fmt(getattr(employer, "contact_method", None))),
+            ("Salary Frequency", fmt(getattr(employer, "salary_freq", None))),
+            ("Pay Method", fmt(getattr(employer, "pay_method", None))),
+            ("Pay Day of Week", fmt(getattr(employer, "pay_day_of_week", None))),
+            ("Contract End Date", fmt(getattr(employer, "contract_end_date", None))),
+        ]
+
+        bank_pairs = [
+            ("Bank Name", fmt(getattr(bank, "bank_name", None))),
+            ("Branch Name", fmt(getattr(bank, "branch_name", None))),
+            ("Branch Code", fmt(getattr(bank, "branch_code", None))),
+            ("Account Holder", fmt(getattr(bank, "account_holder_name", None))),
+            ("Account Number", fmt(getattr(bank, "account_number", None))),
+            ("Account Type", fmt(getattr(bank, "account_type", None))),
+        ]
+
+        loan_type = fmt(getattr(loan, "loan_type", None))
+        amount = getattr(loan, "loan_amount", 0) or 0
+        interest = getattr(loan, "interest_rate", 0) or 0
+        term = getattr(loan, "loan_term", 0) or 0
+        loan_pairs = [
+            ("Loan ID", f"#{getattr(loan, 'id', None)}"),
+            ("Loan Type", loan_type),
+            ("Amount", f"R {amount:,.2f}"),
+            ("Interest Rate", f"{interest}%"),
+            ("Loan Term", f"{term} months"),
+            ("Status", "Pending Review"),
+        ]
+
+        return [
+            *section("CLIENT DETAILS", client_pairs),
+            *section("EMPLOYER DETAILS", employer_pairs),
+            *section("BANK DETAILS", bank_pairs),
+            *section("LOAN DETAILS", loan_pairs),
+        ]
+
     def send_application_with_docs_email(
         self,
-        borrower_name: str,
-        loan_id: int,
-        amount: float,
-        loan_type: str,
-        interest_rate: float,
-        loan_term: int,
-        to_emails: List[str],
+        loan,
+        client,
+        employer=None,
+        bank=None,
+        to_emails: Optional[List[str]] = None,
         attachments: Optional[List[tuple]] = None,
+        force: bool = False,
     ):
+        loan_id = getattr(loan, "id", None)
+        # Avoid duplicate "New Loan Application" emails for the same loan.
+        if not force and loan_id is not None and loan_id in self._new_application_sent:
+            return True
+
         subject = "New Loan Application"
+
         body = "\n".join(
             [
                 "<html>",
                 "  <body style=\"font-family: Arial, sans-serif; "
                 "padding: 20px;\">",
                 "    <h2 style=\"color: #2c3e50;\">New Loan Application</h2>",
-                f"    <p>A new loan application has been submitted and "
-                f"requires review.</p>",
+                "    <p>A new loan application has been submitted and "
+                "requires review.</p>",
                 "    <div style=\"background-color: #f8f9fa; padding: 15px; "
                 "border-radius: 5px; margin: 20px 0;\">",
-                "      <p><strong>Applicant Details:</strong></p>",
-                "      <ul>",
-                f"        <li>Borrower: {borrower_name}</li>",
-                f"        <li>Loan ID: #{loan_id}</li>",
-                f"        <li>Loan Type: {loan_type}</li>",
-                f"        <li>Amount: R {amount:,.2f}</li>",
-                f"        <li>Interest Rate: {interest_rate}%</li>",
-                f"        <li>Loan Term: {loan_term} months</li>",
-                "        <li>Status: Pending Review</li>",
-                "      </ul>",
+                *self._build_details_html(client, employer, bank, loan),
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
                 "proof of residence) are attached to this email.</p>",
@@ -312,8 +436,53 @@ class EmailService:
                 "</html>",
             ]
         )
+        result = self.send_email(
+            to_emails or ["applicants@restoreloans.co.za"], subject, body,
+            attachments=attachments,
+        )
+        if loan_id is not None:
+            self._new_application_sent.add(loan_id)
+        return result
+
+    def send_new_application_notification(
+        self,
+        applicant_name: str,
+        applicant_phone: str,
+        applicant_email: str,
+        id_number: str = "",
+        employer_name: str = "",
+        to_emails: Optional[List[str]] = None,
+    ):
+        subject = "New Application"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "padding: 20px;\">",
+                "    <h2 style=\"color: #2c3e50;\">New Application</h2>",
+                "    <p>A new client has registered and requires review.</p>",
+                "    <div style=\"background-color: #f8f9fa; padding: 15px; "
+                "border-radius: 5px; margin: 20px 0;\">",
+                "      <p><strong>Applicant Details:</strong></p>",
+                "      <ul>",
+                f"        <li>Name: {applicant_name}</li>",
+                f"        <li>Phone: {applicant_phone}</li>",
+                f"        <li>Email: {applicant_email}</li>",
+                f"        <li>ID Number: {id_number}</li>",
+                f"        <li>Employer: {employer_name}</li>",
+                "        <li>Status: Pending Application</li>",
+                "      </ul>",
+                "    </div>",
+                "    <p>Please log in to review the new application.</p>",
+                "    <br>",
+                "    <p>Best regards,<br><strong>"
+                "RestoreLoans System</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
         return self.send_email(
-            to_emails, subject, body, attachments=attachments
+            to_emails or ["applicants@restoreloans.co.za"], subject, body
         )
 
 
