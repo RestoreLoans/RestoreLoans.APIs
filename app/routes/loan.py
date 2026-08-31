@@ -134,8 +134,18 @@ def create_loan(  loan_type: str = Form(...),
 
     borrower_name = f"{user.first_name} {user.last_name}".strip()
 
-    # 1. Ack email with personalized message is sent by the frontend after loan
-    #    creation (via send-loan-email with custom_message).
+    # 1. Send acknowledgement email to the loan applicant.
+    try:
+        if user.email:
+            email_service.send_loan_application_email(
+                borrower_name=borrower_name,
+                loan_id=new_loan.id,
+                amount=new_loan.loan_amount,
+                to_emails=[user.email],
+            )
+    except Exception as e:
+        logging.error("Failed to send applicant acknowledgement email for loan %s: %s",
+                      new_loan.id, e)
 
     # 2. Send application with documents to applicants@restoreloans.co.za
     #    (backend has direct access to uploaded file bytes — more reliable than
