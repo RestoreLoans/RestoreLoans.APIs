@@ -13,6 +13,12 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
 class EmailService:
+    def _from_header(self, sender_email):
+        name = os.getenv("SENDER_NAME")
+        if name:
+            return f"{name} <{sender_email}>"
+        return sender_email
+
     def __init__(self):
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -20,6 +26,10 @@ class EmailService:
         self.sender_password = os.getenv("SENDER_PASSWORD")
         self.smtp_username = os.getenv("SMTP_USERNAME", self.sender_email)
         self.smtp_password = os.getenv("SMTP_PASSWORD", self.sender_password)
+
+    @property
+    def sender_header(self):
+        return self._from_header(self.sender_email)
 
     def send_email(
         self,
@@ -34,7 +44,7 @@ class EmailService:
 
         content_type = "html" if is_html else "plain"
         message = MIMEText(body, content_type, _charset="utf-8")
-        message["From"] = self.sender_email
+        message["From"] = self.sender_header
         message["To"] = ", ".join(to_emails)
         message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
@@ -42,7 +52,7 @@ class EmailService:
 
         if attachments:
             wrapper = MIMEMultipart("mixed")
-            wrapper["From"] = self.sender_email
+            wrapper["From"] = self.sender_header
             wrapper["To"] = ", ".join(to_emails)
             wrapper["Subject"] = subject
             wrapper["Date"] = formatdate(localtime=True)
