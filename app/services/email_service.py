@@ -26,6 +26,11 @@ class EmailService:
         self.sender_password = os.getenv("SENDER_PASSWORD")
         self.smtp_username = os.getenv("SMTP_USERNAME", self.sender_email)
         self.smtp_password = os.getenv("SMTP_PASSWORD", self.sender_password)
+        # Track loan ids for which the "New Loan Application" email has
+        # already been sent, to avoid duplicate emails (e.g. when both the
+        # create_loan auto-send and the manual docs endpoint fire for the
+        # same loan).
+        self._new_application_sent = set()
 
     @property
     def sender_header(self):
@@ -113,31 +118,20 @@ class EmailService:
                 [
                     "<html>",
                     "  <body style=\"font-family: Arial, sans-serif; "
-                    "padding: 20px;\">",
-                    f"    <p>Dear {borrower_name},</p>",
+                    "line-height: 1.6; padding: 20px;\">",
+                    f"    <p>Good day {borrower_name},</p>",
                     "",
-                    "    <p>Thank you for submitting your loan application. "
-                    "We are pleased to confirm that it has been successfully "
-                    "received and is now in the review stage.</p>",
+                    "    <p>This message serves to acknowledge receipt of your "
+                    "loan application. Our team is currently reviewing the "
+                    "details provided.</p>",
                     "",
-                    "    <h2 style=\"color: #2c3e50;\">Application Details</h2>",
-                    "    <div style=\"background-color: #f8f9fa; padding: 15px; "
-                    "border-radius: 5px; margin: 20px 0;\">",
-                    "      <ul>",
-                    f"        <li>Loan ID: #{loan_id}</li>",
-                    f"        <li>Amount: R{amount:,.2f}</li>",
-                    "        <li>Status: Pending Review</li>",
-                    "      </ul>",
-                    "    </div>",
+                    "    <p>If any further documentation or clarification is "
+                    "needed, we will reach out to you promptly.</p>",
                     "",
-                    "    <p>Our team is currently assessing your application. "
-                    "Should any additional information or documents be "
-                    "required, we will contact you directly.</p>",
+                    "    <p>Thank you for choosing Restore Loans. We will keep "
+                    "you informed throughout the process.</p>",
                     "",
-                    "    <p>Thank you for choosing RestoreLoans. We will "
-                    "provide an update shortly.</p>",
-                    "",
-                    "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
+                    "    <p>Warm regards,<br><strong>Restore Loans</strong></p>",
                     "  </body>",
                     "</html>",
                 ]
@@ -399,7 +393,13 @@ class EmailService:
         bank=None,
         to_emails: Optional[List[str]] = None,
         attachments: Optional[List[tuple]] = None,
+        force: bool = False,
     ):
+        loan_id = getattr(loan, "id", None)
+        # Avoid duplicate "New Loan Application" emails for the same loan.
+        if not force and loan_id is not None and loan_id in self._new_application_sent:
+            return True
+
         subject = "New Loan Application"
 
         body = "\n".join(
@@ -423,10 +423,13 @@ class EmailService:
                 "</html>",
             ]
         )
-        return self.send_email(
+        result = self.send_email(
             to_emails or ["applicants@restoreloans.co.za"], subject, body,
             attachments=attachments,
         )
+        if loan_id is not None:
+            self._new_application_sent.add(loan_id)
+        return result
 
     def send_new_application_notification(
         self,
