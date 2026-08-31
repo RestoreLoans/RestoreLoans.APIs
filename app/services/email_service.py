@@ -31,6 +31,11 @@ class EmailService:
         # create_loan auto-send and the manual docs endpoint fire for the
         # same loan).
         self._new_application_sent = set()
+        # Track loan ids for which the "Loan Application Received"
+        # acknowledgement email has already been sent, to avoid duplicates
+        # (e.g. when both the create_loan auto-send and the manual
+        # send-loan-email endpoint fire for the same loan).
+        self._loan_ack_sent = set()
 
     @property
     def sender_header(self):
@@ -107,7 +112,12 @@ class EmailService:
         employer=None,
         bank=None,
         loan=None,
+        force: bool = False,
     ):
+        # Avoid duplicate "Loan Application Received" emails for the same loan.
+        if not force and loan_id is not None and loan_id in self._loan_ack_sent:
+            return True
+
         subject = "Loan Application Received"
         is_html = True
         if custom_message:
@@ -136,7 +146,10 @@ class EmailService:
                     "</html>",
                 ]
             )
-        return self.send_email(to_emails, subject, body, is_html=is_html)
+        result = self.send_email(to_emails, subject, body, is_html=is_html)
+        if loan_id is not None:
+            self._loan_ack_sent.add(loan_id)
+        return result
 
     def send_loan_approval_email(
         self,
