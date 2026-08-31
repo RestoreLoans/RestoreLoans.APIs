@@ -98,6 +98,10 @@ class EmailService:
         amount: float,
         to_emails: List[str],
         custom_message: Optional[str] = None,
+        client=None,
+        employer=None,
+        bank=None,
+        loan=None,
     ):
         subject = "Loan Application Received"
         is_html = True
@@ -110,28 +114,34 @@ class EmailService:
                     "<html>",
                     "  <body style=\"font-family: Arial, sans-serif; "
                     "padding: 20px;\">",
-                    "    <h2 style=\"color: #2c3e50;\">"
-                    "Loan Application Received</h2>",
                     f"    <p>Dear {borrower_name},</p>",
-                    "    <p>We have successfully received your loan",
-                    "    application.</p>",
+                    "",
+                    "    <p>Thank you for submitting your loan application. "
+                    "We are pleased to confirm that it has been successfully "
+                    "received and is now in the review stage.</p>",
+                    "",
+                    "    <h2 style=\"color: #2c3e50;\">Application Details</h2>",
                     "    <div style=\"background-color: #f8f9fa; padding: 15px; "
                     "border-radius: 5px; margin: 20px 0;\">",
-                    "      <p><strong>Application Details:</strong></p>",
                     "      <ul>",
                     f"        <li>Loan ID: #{loan_id}</li>",
                     f"        <li>Amount: R{amount:,.2f}</li>",
                     "        <li>Status: Pending Review</li>",
                     "      </ul>",
                     "    </div>",
-                    "    <p>Our team will review your application and contact",
-                    "    you shortly.</p>",
-                    "    <br>",
+                    "",
+                    "    <p>Our team is currently assessing your application. "
+                    "Should any additional information or documents be "
+                    "required, we will contact you directly.</p>",
+                    "",
+                    "    <p>Thank you for choosing RestoreLoans. We will "
+                    "provide an update shortly.</p>",
+                    "",
                     "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
                     "  </body>",
                     "</html>",
-            ]
-        )
+                ]
+            )
         return self.send_email(to_emails, subject, body, is_html=is_html)
 
     def send_loan_approval_email(
@@ -291,16 +301,11 @@ class EmailService:
         )
         return self.send_email(to_emails, subject, body)
 
-    def send_application_with_docs_email(
-        self,
-        loan,
-        client,
-        employer=None,
-        bank=None,
-        to_emails: Optional[List[str]] = None,
-        attachments: Optional[List[tuple]] = None,
-    ):
-        subject = "New Loan Application"
+    def _build_details_html(self, client, employer, bank, loan):
+        """Build the full CLIENT/EMPLOYER/BANK/LOAN details HTML block.
+
+        Returns a list of lines to be joined and spliced into an email body.
+        """
 
         def fmt(value, default="N/A"):
             if value is None or value == "":
@@ -379,6 +384,24 @@ class EmailService:
             ("Status", "Pending Review"),
         ]
 
+        return [
+            *section("CLIENT DETAILS", client_pairs),
+            *section("EMPLOYER DETAILS", employer_pairs),
+            *section("BANK DETAILS", bank_pairs),
+            *section("LOAN DETAILS", loan_pairs),
+        ]
+
+    def send_application_with_docs_email(
+        self,
+        loan,
+        client,
+        employer=None,
+        bank=None,
+        to_emails: Optional[List[str]] = None,
+        attachments: Optional[List[tuple]] = None,
+    ):
+        subject = "New Loan Application"
+
         body = "\n".join(
             [
                 "<html>",
@@ -389,10 +412,7 @@ class EmailService:
                 "requires review.</p>",
                 "    <div style=\"background-color: #f8f9fa; padding: 15px; "
                 "border-radius: 5px; margin: 20px 0;\">",
-                *section("CLIENT DETAILS", client_pairs),
-                *section("EMPLOYER DETAILS", employer_pairs),
-                *section("BANK DETAILS", bank_pairs),
-                *section("LOAN DETAILS", loan_pairs),
+                *self._build_details_html(client, employer, bank, loan),
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
                 "proof of residence) are attached to this email.</p>",
