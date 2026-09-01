@@ -110,6 +110,11 @@ def logout(db: Session = Depends(get_db)):
     return AuthService.logout_user(db)
 
 
+@router.get("/profile")
+def get_profile(email: str, db: Session = Depends(get_db)):
+    return AuthService.get_profile(db, email)
+
+
 @router.post("/change-password")
 def change_password(
     password_data: UserLogin, db: Session = Depends(get_db)

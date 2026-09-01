@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional
+import enum
 
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -192,6 +193,77 @@ class AuthService:
 
         access_token = create_access_token(data={"sub": user.email})
         return {"access_token": access_token, "token_type": "bearer","user": user}
+
+    @staticmethod
+    def get_profile(db: Session, email: str):
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        dob = user.dob.isoformat() if user.dob else None
+
+        client_details = {
+            "idNumber": user.id_number,
+            "cellphoneNumber": user.phone_number,
+            "homephone": user.homephone,
+            "homeAdd1": user.home_add1,
+            "homeAdd2": user.home_add2,
+            "suburb": user.suburb,
+            "town": user.town,
+            "code": user.postal_code,
+            "title": user.title,
+            "name": user.first_name,
+            "surname": user.last_name,
+            "email": user.email,
+            "password": "",
+            "language": user.language,
+            "dob": dob,
+            "nationality": user.nationality,
+            "gender": user.gender.value if isinstance(user.gender, enum.Enum) else user.gender,
+        }
+
+        employer_details = None
+        if user.company:
+            company = user.company
+            employer_details = {
+                "name": company.name,
+                "type": company.type,
+                "payDayDate": company.pay_day_date.isoformat() if company.pay_day_date else None,
+                "address1": company.address1,
+                "address2": company.address2,
+                "town": company.town,
+                "suburb": company.suburb,
+                "postCode": company.post_code,
+                "phone": company.phone,
+                "appointedOnDate": company.appointed_on_date.isoformat() if company.appointed_on_date else None,
+                "payDateShift": company.pay_date_shift,
+                "contactMethod": company.contact_method,
+                "salaryFeq": company.salary_freq,
+                "payMethod": company.pay_method,
+                "payDayOfWeek": company.pay_day_of_week,
+                "contractEndDate": company.contract_end_date.isoformat() if company.contract_end_date else None,
+            }
+
+        bank_details = None
+        if user.bank:
+            bank = user.bank
+            bank_details = {
+                "bank_name": bank.bank_name,
+                "custom_bank_name": None,
+                "branch_name": bank.branch_name,
+                "branch_code": bank.branch_code,
+                "account_holder_name": bank.account_holder_name,
+                "account_number": bank.account_number,
+                "account_type": bank.account_type.value if isinstance(bank.account_type, enum.Enum) else bank.account_type,
+                "created_at": bank.created_at.date().isoformat() if bank.created_at else None,
+                "updated_at": bank.updated_at.date().isoformat() if bank.updated_at else None,
+            }
+
+        return {
+            "clientDetails": client_details,
+            "employerDetails": employer_details,
+            "bankDetails": bank_details,
+        }
 
     @staticmethod
     def forgot_password(db: Session, email: str):
