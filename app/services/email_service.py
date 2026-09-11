@@ -26,6 +26,14 @@ class EmailService:
         self.sender_password = os.getenv("SENDER_PASSWORD")
         self.smtp_username = os.getenv("SMTP_USERNAME", self.sender_email)
         self.smtp_password = os.getenv("SMTP_PASSWORD", self.sender_password)
+        # Envelope (MAIL FROM) sender used at the SMTP layer. This can differ
+        # from the visible From header (SENDER_EMAIL) to avoid spam-filter
+        # self-to-self suppression while displaying the alias as the sender.
+        self.envelope_sender = (
+            os.getenv("MAIL_FROM")
+            or os.getenv("SMTP_ENVELOPE_SENDER")
+            or self.sender_email
+        )
         # Track loan ids for which the "New Loan Application" email has
         # already been sent, to avoid duplicate emails (e.g. when both the
         # create_loan auto-send and the manual docs endpoint fire for the
@@ -82,13 +90,13 @@ class EmailService:
             is_local = self.smtp_server in ("127.0.0.1", "localhost")
             if is_local:
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                    server.send_message(message)
+                    server.sendmail(self.envelope_sender, to_emails, message.as_string())
             elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
                 server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, local_hostname="restoreloans.co.za")
                 server.ehlo("restoreloans.co.za")
                 server.login(self.smtp_username, self.smtp_password)
-                server.send_message(message)
+                server.sendmail(self.envelope_sender, to_emails, message.as_string())
                 server.quit()
             else:
                 # STARTTLS (e.g. port 587)
@@ -96,7 +104,7 @@ class EmailService:
                     server.starttls()
                     server.ehlo("restoreloans.co.za")
                     server.login(self.smtp_username, self.smtp_password)
-                    server.send_message(message)
+                    server.sendmail(self.envelope_sender, to_emails, message.as_string())
             return True
         except Exception as e:
             raise Exception(f"Failed to send email: {str(e)}")
@@ -484,6 +492,49 @@ class EmailService:
         return self.send_email(
             to_emails or ["applicants@restoreloans.co.za"], subject, body
         )
+
+    def send_welcome_email(
+        self,
+        first_name: str,
+        last_name: str,
+        to_email: str,
+    ):
+        subject = "Welcome to Restore Loans"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "line-height: 1.6; padding: 20px;\">",
+                f"    <p>Good day {first_name},</p>",
+                "",
+                "    <p>Thank you for registering with <strong>"
+                "Restore Loans</strong>. Your account has been "
+                "created successfully.</p>",
+                "",
+                "    <div style=\"background-color: #f0f7ff; padding: 15px; "
+                "border-left: 4px solid #3b82f6; border-radius: 5px; "
+                "margin: 20px 0;\">",
+                "      <p><strong>What happens next?</strong></p>",
+                "      <ul>",
+                "        <li>Our team will review your application "
+                "details.</li>",
+                "        <li>You will be contacted if any additional "
+                "information is required.</li>",
+                "        <li>You can log in at any time to check your "
+                "application status.</li>",
+                "      </ul>",
+                "    </div>",
+                "",
+                "    <p>If you have any questions, please do not "
+                "hesitate to contact our support team.</p>",
+                "",
+                "    <p>Warm regards,<br>"
+                "<strong>Restore Loans</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email([to_email], subject, body)
 
 
 # Create a singleton instance
