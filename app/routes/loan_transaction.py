@@ -159,11 +159,24 @@ def send_loan_email(
     
     try:
         if email_data.email_type == "application":
+            # Always include the registered user's email for the
+            # "Loan Application Received" acknowledgement.
+            recipients = list(email_data.recipient_emails or [])
+            user = db.query(User).filter(
+                User.id == transaction.user_id
+            ).first()
+            if user and user.email and user.email not in recipients:
+                recipients.append(user.email)
+            if not recipients:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No recipient email available for application email",
+                )
             email_service.send_loan_application_email(
                 borrower_name=transaction.borrower,
                 loan_id=transaction.loan_id,
                 amount=transaction.loan_amount,
-                to_emails=email_data.recipient_emails,
+                to_emails=recipients,
                 custom_message=email_data.custom_message,
             )
         

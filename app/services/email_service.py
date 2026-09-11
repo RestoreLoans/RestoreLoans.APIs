@@ -88,15 +88,16 @@ class EmailService:
 
         try:
             is_local = self.smtp_server in ("127.0.0.1", "localhost")
+            flat = message.as_string()
             if is_local:
                 with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                    server.sendmail(self.envelope_sender, to_emails, message.as_string())
+                    server.sendmail(self.envelope_sender, to_emails, flat)
             elif self.smtp_port == 465:
                 # Implicit TLS (SMTPS)
                 server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, local_hostname="restoreloans.co.za")
                 server.ehlo("restoreloans.co.za")
                 server.login(self.smtp_username, self.smtp_password)
-                server.sendmail(self.envelope_sender, to_emails, message.as_string())
+                server.sendmail(self.envelope_sender, to_emails, flat)
                 server.quit()
             else:
                 # STARTTLS (e.g. port 587)
@@ -104,7 +105,7 @@ class EmailService:
                     server.starttls()
                     server.ehlo("restoreloans.co.za")
                     server.login(self.smtp_username, self.smtp_password)
-                    server.sendmail(self.envelope_sender, to_emails, message.as_string())
+                    server.sendmail(self.envelope_sender, to_emails, flat)
             return True
         except Exception as e:
             raise Exception(f"Failed to send email: {str(e)}")
