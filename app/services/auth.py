@@ -176,6 +176,16 @@ class AuthService:
         except Exception as e:
             logging.error("Failed to send new application notification: %s", e)
 
+        # Send welcome acknowledgement email to the newly registered user
+        try:
+            email_service.send_welcome_email(
+                first_name=client.name,
+                last_name=client.surname,
+                to_email=client.email,
+            )
+        except Exception as e:
+            logging.error("Failed to send welcome email: %s", e)
+
         return db_user
 
 

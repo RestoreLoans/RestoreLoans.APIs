@@ -485,6 +485,49 @@ class EmailService:
             to_emails or ["applicants@restoreloans.co.za"], subject, body
         )
 
+    def send_welcome_email(
+        self,
+        first_name: str,
+        last_name: str,
+        to_email: str,
+    ):
+        subject = "Welcome to Restore Loans"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "line-height: 1.6; padding: 20px;\">",
+                f"    <p>Good day {first_name},</p>",
+                "",
+                "    <p>Thank you for registering with <strong>"
+                "Restore Loans</strong>. Your account has been "
+                "created successfully.</p>",
+                "",
+                "    <div style=\"background-color: #f0f7ff; padding: 15px; "
+                "border-left: 4px solid #3b82f6; border-radius: 5px; "
+                "margin: 20px 0;\">",
+                "      <p><strong>What happens next?</strong></p>",
+                "      <ul>",
+                "        <li>Our team will review your application "
+                "details.</li>",
+                "        <li>You will be contacted if any additional "
+                "information is required.</li>",
+                "        <li>You can log in at any time to check your "
+                "application status.</li>",
+                "      </ul>",
+                "    </div>",
+                "",
+                "    <p>If you have any questions, please do not "
+                "hesitate to contact our support team.</p>",
+                "",
+                "    <p>Warm regards,<br>"
+                "<strong>Restore Loans</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email([to_email], subject, body)
+
 
 # Create a singleton instance
 email_service = EmailService()
