@@ -14,7 +14,7 @@ class LoanStatus(str, Enum):
     default = "default"
 
 class LoanBase(BaseModel):
-    loan_type: str
+    loan_type: LoanType
     loan_amount: float
     interest_rate: float
     loan_term: int  # in months

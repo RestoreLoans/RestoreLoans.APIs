@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.company import Company
 from app.schemas.company import CompanyResponse
-from app.schemas.email import SendLoanEmailRequest, SendApplicationDocsEmailRequest
+from app.schemas.email import SendLoanEmailRequest
 from app.services.email_service import email_service  # Change from 'email' to 'email_service'
 
 from pydantic import BaseModel
@@ -159,7 +159,8 @@ def send_loan_email(
     
     try:
         if email_data.email_type == "application":
-            # Recipient defaults to the applicant's registered email.
+            # Always include the registered user's email for the
+            # "Loan Application Received" acknowledgement.
             recipients = list(email_data.recipient_emails or [])
             user = db.query(User).filter(
                 User.id == transaction.user_id
@@ -178,43 +179,25 @@ def send_loan_email(
                 to_emails=recipients,
                 custom_message=email_data.custom_message,
             )
-
+        
         elif email_data.email_type == "approval":
-            recipients = list(email_data.recipient_emails or [])
-            if not recipients:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No recipient email provided for approval email",
-                )
             email_service.send_loan_approval_email(
                 borrower_name=transaction.borrower,
                 loan_id=transaction.loan_id,
                 amount=transaction.loan_amount,
                 account_no=transaction.account_no or "N/A",
-                to_emails=recipients
+                to_emails=email_data.recipient_emails
             )
-
+        
         elif email_data.email_type == "rejection":
-            recipients = list(email_data.recipient_emails or [])
-            if not recipients:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No recipient email provided for rejection email",
-                )
             email_service.send_loan_rejection_email(
                 borrower_name=transaction.borrower,
                 loan_id=transaction.loan_id,
                 reason=email_data.rejection_reason or "Not specified",
-                to_emails=recipients
+                to_emails=email_data.recipient_emails
             )
-
+        
         elif email_data.email_type == "custom":
-            recipients = list(email_data.recipient_emails or [])
-            if not recipients:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No recipient email provided for custom email",
-                )
             email_service.send_custom_loan_email(
                 borrower_name=transaction.borrower,
                 loan_id=transaction.loan_id,
@@ -224,9 +207,9 @@ def send_loan_email(
                     email_data.custom_message
                     or "Your loan status has been updated."
                 ),
-                to_emails=recipients
+                to_emails=email_data.recipient_emails
             )
-
+        
         else:
             raise HTTPException(
                 status_code=400,
@@ -235,13 +218,12 @@ def send_loan_email(
                     "rejection, or custom"
                 )
             )
-
-        sent_recipients = recipients
+        
         return {
             "success": True,
             "message": (
                 f"Email sent successfully to "
-                f"{len(sent_recipients)} recipient(s)"
+                f"{len(email_data.recipient_emails)} recipient(s)"
             ),
             "email_type": email_data.email_type
         }
@@ -254,8 +236,7 @@ def send_loan_email(
 
 @router.post("/send-application-docs-email")
 def send_application_docs_email(
-    transaction_id: Optional[int] = Query(None),
-    request: Optional[SendApplicationDocsEmailRequest] = Body(None),
+    transaction_id: int = Query(...),
     db: Session = Depends(get_db)
 ):
     """Send the applicant's documents to applicants@restoreloans.co.za.
@@ -263,19 +244,11 @@ def send_application_docs_email(
     Downloads the ID document, bank statement and proof of residence
     attached to the loan record and emails them to the internal
     review inbox with subject 'New Loan Application'.
-    Accepts transaction_id as a query param or in the JSON body.
     """
     from app.models.loan import Loan
 
-    txn_id = transaction_id or (request.transaction_id if request else None)
-    if not txn_id:
-        raise HTTPException(
-            status_code=400,
-            detail="transaction_id is required (query param or JSON body)",
-        )
-
     txn = db.query(LoanTransaction).filter(
-        LoanTransaction.id == txn_id
+        LoanTransaction.id == transaction_id
     ).first()
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
