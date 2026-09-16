@@ -75,6 +75,10 @@ def create_loan(  loan_type: str = Form(...),
     id_document: UploadFile = File(...),
     bank_statement: UploadFile = File(...),
     proof_of_residence: UploadFile = File(...), db: Session = Depends(get_db)):
+    # Normalize loan_type so responses serialize correctly (schema uses a
+    # lowercase enum while the DB column is a free-form string).
+    loan_type = loan_type.strip().lower()
+
     # Check if the user exists
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
