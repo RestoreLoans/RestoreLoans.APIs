@@ -26,6 +26,8 @@ jobs:
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           SFTP_PORT: ${{ secrets.SFTP_PORT }}
         run: |
+          trap 'rm -f ~/.netrc' EXIT
+
           cat > ~/.netrc <<EOF
           machine $SFTP_HOST
           login $SFTP_USERNAME
@@ -42,7 +44,6 @@ jobs:
           mirror -R --verbose ./ ./
           bye
           EOF
-          rm -f ~/.netrc
       - name: Install requirements in venv
         run: |
             python -m venv venv
