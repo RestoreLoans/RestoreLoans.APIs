@@ -26,15 +26,23 @@ jobs:
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           SFTP_PORT: ${{ secrets.SFTP_PORT }}
         run: |
+          cat > ~/.netrc <<EOF
+          machine $SFTP_HOST
+          login $SFTP_USERNAME
+          password $SFTP_PASSWORD
+          EOF
+          chmod 600 ~/.netrc
+
           lftp <<EOF
           set net:timeout 60
           set net:max-retries 5
           set net:reconnect-interval-base 5
           set net:reconnect-interval-max 20
-          open -u "$SFTP_USERNAME","$SFTP_PASSWORD" -p "${SFTP_PORT:-22}" "sftp://$SFTP_HOST"
+          open -p "${SFTP_PORT:-22}" "sftp://$SFTP_HOST"
           mirror -R --verbose ./ ./
           bye
           EOF
+          rm -f ~/.netrc
       - name: Install requirements in venv
         run: |
             python -m venv venv
