@@ -20,11 +20,10 @@ class Loan(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    loan_type = Column(Enum(LoanType), nullable=False)
+    loan_type = Column(String(200))
     loan_amount = Column(Float, nullable=False)
     interest_rate = Column(Float, nullable=True)
     loan_term = Column(Integer, nullable=True)  # in months
-    loan_type = Column(String(200))
     monthly_installment = Column(Float, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)

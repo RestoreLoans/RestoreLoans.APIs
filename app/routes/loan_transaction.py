@@ -1,4 +1,3 @@
-import requests as http_requests
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -159,11 +158,24 @@ def send_loan_email(
     
     try:
         if email_data.email_type == "application":
+            # Always include the registered user's email for the
+            # "Loan Application Received" acknowledgement.
+            recipients = list(email_data.recipient_emails or [])
+            user = db.query(User).filter(
+                User.id == transaction.user_id
+            ).first()
+            if user and user.email and user.email not in recipients:
+                recipients.append(user.email)
+            if not recipients:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No recipient email available for application email",
+                )
             email_service.send_loan_application_email(
                 borrower_name=transaction.borrower,
                 loan_id=transaction.loan_id,
                 amount=transaction.loan_amount,
-                to_emails=email_data.recipient_emails,
+                to_emails=recipients,
                 custom_message=email_data.custom_message,
             )
         
@@ -244,32 +256,17 @@ def send_application_docs_email(
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found for transaction")
 
-    attachments = []
-    doc_urls = [
-        (loan.id_path, "id_document"),
-        (loan.bank_path, "bank_statement"),
-        (loan.proof_of_residence_path, "proof_of_residence"),
-    ]
-    for url, label in doc_urls:
-        if url:
-            try:
-                resp = http_requests.get(url, timeout=30)
-                resp.raise_for_status()
-                filename = url.split("/")[-1].split("?")[0] or f"{label}.pdf"
-                attachments.append((resp.content, filename))
-            except Exception as exc:
-                logging.warning("Could not download %s from %s: %s", label, url, exc)
-
     loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
     client = db.query(User).filter(User.id == loan.user_id).first()
     try:
+        # Documents are downloaded and cached by the email service, so repeat
+        # sends for the same loan reuse the already-fetched attachments.
         email_service.send_application_with_docs_email(
             loan=loan,
             client=client,
             employer=getattr(client, "company", None) if client else None,
             bank=getattr(client, "bank", None) if client else None,
             to_emails=["applicants@restoreloans.co.za"],
-            attachments=attachments or None,
         )
     except Exception as exc:
         raise HTTPException(
