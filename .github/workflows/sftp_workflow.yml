@@ -16,15 +16,25 @@ jobs:
         uses: actions/checkout@v4
 
 
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
       - name: SFTP upload
-        uses: Dylan700/sftp-upload-action@5108b43b1cd4d60abd1982edb4c7159ece875c44 # v1.2.5
-        with:
-          server: ${{ secrets.SFTP_HOST }}
-          username: ${{ secrets.SFTP_USERNAME }}
-          password: ${{ secrets.SFTP_PASSWORD }}
-          port: ${{ secrets.SFTP_PORT }}
-          uploads: |
-            ./ => ./
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+        run: |
+          lftp <<EOF
+          set net:timeout 60
+          set net:max-retries 5
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-max 20
+          open -u "$SFTP_USERNAME","$SFTP_PASSWORD" -p "${SFTP_PORT:-22}" "sftp://$SFTP_HOST"
+          mirror -R --verbose ./ ./
+          bye
+          EOF
       - name: Install requirements in venv
         run: |
             python -m venv venv
