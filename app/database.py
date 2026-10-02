@@ -12,7 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set or could not be loaded from the .env file.")
 
-print(f"DATABASE_URL: {DATABASE_URL}") 
+print(f"DATABASE_URL loaded (host={DATABASE_URL.split('@')[-1].split('/')[0]})")
 
 SQLALCHEMY_DATABASE_URL = DATABASE_URL
 
