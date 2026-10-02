@@ -625,7 +625,6 @@ class EmailService:
         result = self.send_email(
             recipients, subject, body,
             attachments=attachments,
-            profile_names=["external", "fallback"],
         )
         if loan_id is not None:
             self._new_application_sent.add(loan_id)

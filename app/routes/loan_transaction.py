@@ -259,6 +259,13 @@ def send_application_docs_email(
     loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
     client = db.query(User).filter(User.id == loan.user_id).first()
     try:
+        # The applicant's email is always included so the user who applied also
+        # receives a copy of their application with the supporting documents.
+        applicant_email = client.email if client else None
+        recipients = ["applicants@restoreloans.co.za"]
+        if applicant_email:
+            recipients.append(applicant_email)
+
         # Documents are downloaded and cached by the email service, so repeat
         # sends for the same loan reuse the already-fetched attachments.
         email_service.send_application_with_docs_email(
@@ -266,7 +273,7 @@ def send_application_docs_email(
             client=client,
             employer=getattr(client, "company", None) if client else None,
             bank=getattr(client, "bank", None) if client else None,
-            to_emails=["applicants@restoreloans.co.za"],
+            to_emails=recipients,
         )
     except Exception as exc:
         raise HTTPException(
@@ -276,7 +283,7 @@ def send_application_docs_email(
 
     return {
         "success": True,
-        "message": "Application documents sent to applicants@restoreloans.co.za",
+        "message": "Application documents sent to applicants@restoreloans.co.za and the applicant",
     }
 
 @router.post("/mapping-insert", response_model=TransactionResponse)
