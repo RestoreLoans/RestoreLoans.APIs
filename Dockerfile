@@ -12,4 +12,4 @@ FROM python:3.12.15-slim
 WORKDIR /app
 COPY --from=builder /app/.venv .venv/
 COPY . .
-CMD ["/app/.venv/bin/fastapi", "run"]
+CMD /app/.venv/bin/gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-10000} --workers 2 --timeout 120 --access-logfile -
