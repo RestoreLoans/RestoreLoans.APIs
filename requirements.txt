@@ -24,7 +24,7 @@ mysql-connector-python==9.3.0
 orjson==3.10.16
 packaging==25.0
 passlib==1.7.4
-psycopg2==2.9.10
+psycopg2-binary==2.9.10
 pyasn1==0.4.8
 pydantic==2.11.3
 pydantic_core==2.33.1
