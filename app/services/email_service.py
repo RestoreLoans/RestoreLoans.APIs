@@ -9,9 +9,12 @@ from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
 import enum as _enum
 import os
-from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
+from app.env_loader import load_env
+
+# Load .env from either the app/ or project-root location; injected
+# environment variables always take precedence.
+load_env()
 
 
 class EmailService:

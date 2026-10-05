@@ -1,16 +1,21 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
 import os
 
-# Load environment variables from .env file
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+from app.env_loader import load_env
+
+# Load environment variables from the .env file (works for both <root>/app/.env
+# and <root>/.env container layouts; real env vars win).
+load_env()
 
 # Access variables
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set or could not be loaded from the .env file.")
+    raise ValueError(
+        "DATABASE_URL is not set. Provide it as an environment variable or add "
+        "it to .env at the project root (or app/.env)."
+    )
 
 print(f"DATABASE_URL loaded (host={DATABASE_URL.split('@')[-1].split('/')[0]})")
 
