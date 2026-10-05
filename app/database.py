@@ -13,9 +13,18 @@ load_env()
 # Access variables
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError(
-        "DATABASE_URL is not set. Provide it as an environment variable or add "
-        "it to .env at the project root (or app/.env)."
+    raise RuntimeError(
+        "DATABASE_URL is not set.\n"
+        "This app reads configuration from environment variables. .env files are "
+        "gitignored and are NOT copied into the Docker image, so a container must "
+        "receive DATABASE_URL from its runtime.\n"
+        "Fix by setting it on the host, for example:\n"
+        "  docker run -e DATABASE_URL='postgresql://user:pass@host:5432/db' ...\n"
+        "  docker compose:  environment: / env_file: pointing at a real .env\n"
+        "  Kubernetes:      envFrom: secretRef: ...\n"
+        "  Render/Fly/Heroku: add DATABASE_URL under the service's Environment "
+        "variables.\n"
+        "For local development, create app/.env (see .env.example)."
     )
 
 logging.getLogger(__name__).info(
