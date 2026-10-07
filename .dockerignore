@@ -3,3 +3,12 @@ fly.toml
 __pycache__/
 .envrc
 .venv/
+venv/
+**/.env
+*.log
+test.db
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.idea/
+*.ipynb
