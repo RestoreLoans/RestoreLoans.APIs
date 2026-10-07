@@ -20,7 +20,13 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     except Exception as e:
         logging.error("Database unavailable on startup: %s", e)
-    yield
+    try:
+        yield
+    except asyncio.CancelledError:
+        # Ctrl+C cancels the lifespan task while it waits for the shutdown
+        # message. Starlette reports that as a failed shutdown and logs a full
+        # traceback; it is a normal interrupt, not an application failure.
+        pass
 
 
 app = FastAPI(title="RestoreLoans API2", version="1.0.0", lifespan=lifespan)
