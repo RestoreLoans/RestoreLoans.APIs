@@ -680,37 +680,32 @@ class EmailService:
         last_name: str,
         to_email: str,
     ):
-        subject = "Welcome to Restore Loans"
+        subject = "Welcome to RestoreLoans"
         body = "\n".join(
             [
                 "<html>",
                 "  <body style=\"font-family: Arial, sans-serif; "
                 "line-height: 1.6; padding: 20px;\">",
-                f"    <p>Good day {first_name},</p>",
+                f"    <p>Good day{', ' + (first_name or '').strip() if first_name else ''},</p>",
                 "",
-                "    <p>Thank you for registering with <strong>"
-                "Restore Loans</strong>. Your account has been "
-                "created successfully.</p>",
+                "    <p>Welcome to <strong>RestoreLoans</strong>. "
+                "We’re excited to have you join our community and appreciate "
+                "you taking the time to register.</p>",
                 "",
-                "    <div style=\"background-color: #f0f7ff; padding: 15px; "
-                "border-left: 4px solid #3b82f6; border-radius: 5px; "
-                "margin: 20px 0;\">",
-                "      <p><strong>What happens next?</strong></p>",
-                "      <ul>",
-                "        <li>Our team will review your application "
-                "details.</li>",
-                "        <li>You will be contacted if any additional "
-                "information is required.</li>",
-                "        <li>You can log in at any time to check your "
-                "application status.</li>",
-                "      </ul>",
-                "    </div>",
+                "    <p>Your account has been successfully created, and you now "
+                "have access to our loan services, application tools, and "
+                "support resources. Our goal is to make your financial journey "
+                "simple, transparent, and stress‑free.</p>",
                 "",
-                "    <p>If you have any questions, please do not "
-                "hesitate to contact our support team.</p>",
+                "    <p>If you need any assistance getting started or have "
+                "questions about our loan products, our team is here to help. "
+                "Feel free to reach out at any time.</p>",
                 "",
-                "    <p>Warm regards,<br>"
-                "<strong>Restore Loans</strong></p>",
+                "    <p>Thank you for choosing <strong>RestoreLoans</strong>. "
+                "We look forward to supporting you.</p>",
+                "",
+                "    <p>Kind regards,<br>"
+                "<strong>RestoreLoans Team</strong></p>",
                 "  </body>",
                 "</html>",
             ]
