@@ -113,6 +113,19 @@ class UserForgotPassword(BaseModel):
 class UserForgotUsername(BaseModel):
     email: EmailStr
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class VerifyResetOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+    confirm_password: str
+
 class UserUpdate(BaseModel):
     first_name: Optional[str]
     last_name: Optional[str]

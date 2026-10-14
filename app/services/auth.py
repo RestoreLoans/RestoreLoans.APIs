@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import enum
 
@@ -10,12 +10,15 @@ from fastapi import HTTPException, status
 from ..models.user import User
 from ..models.company import Company
 from ..models.bank import BankDetail
+from ..models.password_reset import PasswordResetToken
 from ..schemas.user import UserCreate, UserResponse, RegisterPayload
 from ..schemas.company import CompanyCreate
 from ..schemas.bank import BankDetailCreate
 from ..utils.security import create_access_token, verify_password, get_password_hash
+import os
 import random
 import hashlib
+import secrets
 import string
 from app.schemas.user import UserResponse
 from app.schemas.userRoles import UserRoleResponse
@@ -23,6 +26,19 @@ from app.services.email_service import email_service
 import logging
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Password reset code settings
+RESET_OTP_TTL_MINUTES = int(os.getenv("PASSWORD_RESET_OTP_TTL_MINUTES", "15"))
+RESET_OTP_MAX_ATTEMPTS = int(os.getenv("PASSWORD_RESET_OTP_MAX_ATTEMPTS", "5"))
+RESET_OTP_RESEND_COOLDOWN_SECONDS = int(
+    os.getenv("PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS", "60")
+)
+MIN_PASSWORD_LENGTH = int(os.getenv("MIN_PASSWORD_LENGTH", "8"))
+
+
+def _utcnow() -> datetime:
+    # Naive UTC, matching the naive DateTime columns used across the models.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AuthService:
@@ -276,14 +292,225 @@ class AuthService:
         }
 
     @staticmethod
+    def _hash_reset_otp(email: str, otp: str) -> str:
+        return hashlib.sha256(
+            f"{email.strip().lower()}:{otp}".encode("utf-8")
+        ).hexdigest()
+
+    @staticmethod
+    def _active_reset_token(
+        db: Session, email: str
+    ) -> Optional[PasswordResetToken]:
+        return (
+            db.query(PasswordResetToken)
+            .filter(
+                PasswordResetToken.email == email,
+                PasswordResetToken.used_at.is_(None),
+                PasswordResetToken.expires_at > _utcnow(),
+            )
+            .order_by(PasswordResetToken.id.desc())
+            .first()
+        )
+
+    @staticmethod
     def forgot_password(db: Session, email: str):
+        """Email a single-use 6-digit reset code to a registered user."""
+        email = email.strip().lower()
         user = db.query(User).filter(User.email == email).first()
         if not user:
             raise HTTPException(status_code=404, detail="Email not found")
 
-        # Generate OTP (in a real app, store this with expiry)
-        otp = ''.join(random.choices(string.digits, k=6))
-        return {"message": "OTP sent to registered phone", "otp": otp}  # Don't return OTP in production
+        now = _utcnow()
+
+        # Throttle repeat requests so the mailbox cannot be spammed.
+        pending = AuthService._active_reset_token(db, email)
+        if pending and pending.created_at:
+            elapsed = (now - pending.created_at).total_seconds()
+            wait = int(RESET_OTP_RESEND_COOLDOWN_SECONDS - elapsed)
+            if wait > 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "A reset code was just sent. Please wait "
+                        f"{wait} second(s) before requesting another one."
+                    ),
+                )
+
+        # Any earlier code becomes unusable once a new one is issued.
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.email == email,
+            PasswordResetToken.used_at.is_(None),
+        ).update({"used_at": now}, synchronize_session=False)
+
+        otp = "".join(secrets.choice(string.digits) for _ in range(6))
+        token = PasswordResetToken(
+            user_id=user.id,
+            email=email,
+            otp_hash=AuthService._hash_reset_otp(email, otp),
+            attempts=0,
+            expires_at=now + timedelta(minutes=RESET_OTP_TTL_MINUTES),
+            created_at=now,
+        )
+        db.add(token)
+        db.commit()
+        db.refresh(token)
+
+        try:
+            email_service.send_password_reset_email(
+                to_email=email,
+                first_name=user.first_name,
+                otp=otp,
+                expires_minutes=RESET_OTP_TTL_MINUTES,
+            )
+        except Exception as e:
+            # Do not leave a code the user never received blocking retries.
+            token.used_at = _utcnow()
+            db.commit()
+            logging.error("Failed to send password reset email: %s", e)
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "We could not send the reset email right now. Please try "
+                    "again in a moment, or contact support."
+                ),
+            )
+
+        return {
+            "message": (
+                f"A 6-digit reset code was sent to {email}. It expires in "
+                f"{RESET_OTP_TTL_MINUTES} minutes."
+            ),
+            "expires_in_minutes": RESET_OTP_TTL_MINUTES,
+        }
+
+    @staticmethod
+    def verify_reset_otp(db: Session, email: str, otp: str):
+        """Check a reset code without consuming it (used before the new password step)."""
+        email = email.strip().lower()
+        token = AuthService._active_reset_token(db, email)
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This reset code has expired or is no longer valid. "
+                    "Please request a new one."
+                ),
+            )
+
+        if not otp or not otp.isdigit() or len(otp) != 6:
+            raise HTTPException(
+                status_code=400, detail="The reset code must be 6 digits."
+            )
+
+        if token.attempts >= RESET_OTP_MAX_ATTEMPTS:
+            token.used_at = _utcnow()
+            db.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Too many incorrect attempts. Please request a new reset "
+                    "code."
+                ),
+            )
+
+        if token.otp_hash != AuthService._hash_reset_otp(email, otp):
+            token.attempts = (token.attempts or 0) + 1
+            db.commit()
+            remaining = max(RESET_OTP_MAX_ATTEMPTS - token.attempts, 0)
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Incorrect reset code. "
+                    f"{remaining} attempt(s) remaining."
+                ),
+            )
+
+        return {"message": "Reset code verified.", "verified": True}
+
+    @staticmethod
+    def reset_password(
+        db: Session,
+        email: str,
+        otp: str,
+        new_password: str,
+        confirm_password: Optional[str] = None,
+    ):
+        """Consume a valid reset code and store the new password hash."""
+        email = email.strip().lower()
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Email not found")
+
+        if confirm_password is not None and new_password != confirm_password:
+            raise HTTPException(
+                status_code=400, detail="The passwords do not match."
+            )
+        if len(new_password or "") < MIN_PASSWORD_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Password must be at least {MIN_PASSWORD_LENGTH} characters long."
+                ),
+            )
+
+        token = AuthService._active_reset_token(db, email)
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This reset code has expired or is no longer valid. "
+                    "Please request a new one."
+                ),
+            )
+
+        if token.attempts >= RESET_OTP_MAX_ATTEMPTS:
+            token.used_at = _utcnow()
+            db.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Too many incorrect attempts. Please request a new reset "
+                    "code."
+                ),
+            )
+
+        if token.otp_hash != AuthService._hash_reset_otp(email, otp or ""):
+            token.attempts = (token.attempts or 0) + 1
+            db.commit()
+            remaining = max(RESET_OTP_MAX_ATTEMPTS - token.attempts, 0)
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Incorrect reset code. "
+                    f"{remaining} attempt(s) remaining."
+                ),
+            )
+
+        user.password = get_password_hash(new_password)
+        token.used_at = _utcnow()
+
+        # Invalidate any other outstanding codes for this address.
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.email == email,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.id != token.id,
+        ).update({"used_at": token.used_at}, synchronize_session=False)
+
+        db.commit()
+
+        try:
+            email_service.send_password_changed_email(
+                to_email=email, first_name=user.first_name
+            )
+        except Exception as e:
+            logging.error("Failed to send password changed email: %s", e)
+
+        return {
+            "message": (
+                "Password updated successfully. You can now log in with your "
+                "new password."
+            )
+        }
 
     @staticmethod
     def forgot_username(db: Session, email: str):

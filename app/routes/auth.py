@@ -10,6 +10,9 @@ from app.schemas.user import (
     UserForgotUsername,
     UserResponse,
     RegisterPayload,
+    ForgotPasswordRequest,
+    VerifyResetOtpRequest,
+    ResetPasswordRequest,
 )
 from app.services.auth import AuthService
 
@@ -40,9 +43,18 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/forgot-password")
 def forgot_password(
-    forgot_data: UserForgotPassword, db: Session = Depends(get_db)
+    forgot_data: ForgotPasswordRequest, db: Session = Depends(get_db)
 ):
+    """Step 1: email a 6-digit, single-use reset code to the user."""
     return AuthService.forgot_password(db, forgot_data.email)
+
+
+@router.post("/verify-reset-otp")
+def verify_reset_otp(
+    otp_data: VerifyResetOtpRequest, db: Session = Depends(get_db)
+):
+    """Step 2: check the emailed code before asking for a new password."""
+    return AuthService.verify_reset_otp(db, otp_data.email, otp_data.otp)
 
 
 @router.post("/forgot-username")
@@ -89,10 +101,15 @@ def verify_password(
 
 @router.post("/reset-password")
 def reset_password(
-    password_data: UserForgotPassword, db: Session = Depends(get_db)
+    password_data: ResetPasswordRequest, db: Session = Depends(get_db)
 ):
+    """Step 3: consume the code and store the new password."""
     return AuthService.reset_password(
-        db, password_data.email, password_data.password
+        db,
+        password_data.email,
+        password_data.otp,
+        password_data.new_password,
+        password_data.confirm_password,
     )
 
 

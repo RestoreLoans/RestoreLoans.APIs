@@ -717,6 +717,78 @@ class EmailService:
         )
         return self.send_email([to_email], subject, body)
 
+    def send_password_reset_email(
+        self,
+        to_email: str,
+        first_name: str,
+        otp: str,
+        expires_minutes: int = 15,
+    ):
+        subject = "Reset your Restore Loans password"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "line-height: 1.6; padding: 20px;\">",
+                f"    <p>Good day {first_name or 'there'},</p>",
+                "",
+                "    <p>We received a request to reset the password for your "
+                "<strong>Restore Loans</strong> account.</p>",
+                "",
+                "    <p>Use the code below to choose a new password:</p>",
+                "",
+                "    <div style=\"background-color: #f0f7ff; padding: 20px; "
+                "border-left: 4px solid #3b82f6; border-radius: 5px; "
+                "margin: 20px 0; text-align: center;\">",
+                f"      <p style=\"font-size: 30px; letter-spacing: 8px; "
+                f"font-weight: bold; margin: 0;\">{otp}</p>",
+                "    </div>",
+                "",
+                f"    <p>This code expires in <strong>{expires_minutes} "
+                "minutes</strong> and can only be used once.</p>",
+                "",
+                "    <p>If you did not request a password reset, you can safely "
+                "ignore this email &mdash; your password will not change.</p>",
+                "",
+                "    <p>Warm regards,<br>"
+                "<strong>Restore Loans</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email([to_email], subject, body)
+
+    def send_password_changed_email(
+        self,
+        to_email: str,
+        first_name: str,
+    ):
+        subject = "Your Restore Loans password was changed"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; "
+                "line-height: 1.6; padding: 20px;\">",
+                f"    <p>Good day {first_name or 'there'},</p>",
+                "",
+                "    <p>The password for your <strong>Restore Loans</strong> "
+                "account was changed successfully.</p>",
+                "",
+                "    <div style=\"background-color: #f0f7ff; padding: 15px; "
+                "border-left: 4px solid #3b82f6; border-radius: 5px; "
+                "margin: 20px 0;\">",
+                "      <p>If this was not you, please contact our support team "
+                "immediately.</p>",
+                "    </div>",
+                "",
+                "    <p>Warm regards,<br>"
+                "<strong>Restore Loans</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email([to_email], subject, body)
+
 
 # Create a singleton instance
 email_service = EmailService()
