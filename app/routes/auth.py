@@ -13,6 +13,7 @@ from app.schemas.user import (
     ForgotPasswordRequest,
     VerifyResetOtpRequest,
     ResetPasswordRequest,
+    UpdateProfilePictureRequest,
 )
 from app.services.auth import AuthService
 
@@ -193,10 +194,10 @@ def update_address(
 
 @router.post("/update-profile-picture")
 def update_profile_picture(
-    picture_data: UserForgotPassword, db: Session = Depends(get_db)
+    picture_data: UpdateProfilePictureRequest, db: Session = Depends(get_db)
 ):
     return AuthService.update_profile_picture(
-        db, picture_data.profile_picture, picture_data.password
+        db, picture_data.email, picture_data.profile_picture
     )
 
 

@@ -126,6 +126,11 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
     confirm_password: str
 
+class UpdateProfilePictureRequest(BaseModel):
+    email: EmailStr
+    profile_picture: str
+
+
 class UserUpdate(BaseModel):
     first_name: Optional[str]
     last_name: Optional[str]

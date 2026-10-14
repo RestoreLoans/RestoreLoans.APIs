@@ -11,6 +11,7 @@ from ..models.user import User
 from ..models.company import Company
 from ..models.bank import BankDetail
 from ..models.password_reset import PasswordResetToken
+from ..models.profile_picture import UserProfilePicture
 from ..schemas.user import UserCreate, UserResponse, RegisterPayload
 from ..schemas.company import CompanyCreate
 from ..schemas.bank import BankDetailCreate
@@ -228,7 +229,14 @@ class AuthService:
 
         dob = user.dob.isoformat() if user.dob else None
 
+        picture = (
+            db.query(UserProfilePicture)
+            .filter(UserProfilePicture.user_id == user.id)
+            .first()
+        )
+
         client_details = {
+            "profilePicture": picture.picture if picture else None,
             "idNumber": user.id_number,
             "cellphoneNumber": user.phone_number,
             "homephone": user.homephone,
@@ -510,6 +518,53 @@ class AuthService:
                 "Password updated successfully. You can now log in with your "
                 "new password."
             )
+        }
+
+    @staticmethod
+    def update_profile_picture(db: Session, email: str, picture: str):
+        """Create or replace the stored avatar for the given user."""
+        email = (email or "").strip().lower()
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        picture = (picture or "").strip()
+        if not picture:
+            raise HTTPException(
+                status_code=400, detail="A profile picture is required."
+            )
+        if not picture.startswith("data:image/"):
+            raise HTTPException(
+                status_code=400,
+                detail="Profile picture must be a valid image data URL.",
+            )
+        # Guard against very large uploads bloating the row (~5 MB of base64).
+        if len(picture) > 5_000_000:
+            raise HTTPException(
+                status_code=400, detail="Profile picture is too large."
+            )
+
+        now = _utcnow()
+        record = (
+            db.query(UserProfilePicture)
+            .filter(UserProfilePicture.user_id == user.id)
+            .first()
+        )
+        if record:
+            record.picture = picture
+            record.updated_at = now
+        else:
+            record = UserProfilePicture(
+                user_id=user.id, picture=picture, updated_at=now
+            )
+            db.add(record)
+
+        db.commit()
+        db.refresh(record)
+
+        return {
+            "message": "Profile picture updated successfully.",
+            "profile_picture": record.picture,
         }
 
     @staticmethod
