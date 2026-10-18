@@ -256,6 +256,17 @@ def send_application_docs_email(
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found for transaction")
 
+    # The "New Loan Application" email (with the applicant's documents attached)
+    # is normally sent by POST /loans/ from the uploaded file bytes. This route
+    # is a fallback, so if it has already gone out for this loan, do nothing to
+    # avoid a duplicate — and, on another worker, an attachment-less — copy.
+    if getattr(loan, "docs_email_sent", False):
+        return {
+            "success": True,
+            "message": "Application documents already sent to applicants@restoreloans.co.za",
+            "already_sent": True,
+        }
+
     loan_type_str = str(loan.loan_type.value) if hasattr(loan.loan_type, "value") else str(loan.loan_type) if loan.loan_type else ""
     client = db.query(User).filter(User.id == loan.user_id).first()
     try:
@@ -280,6 +291,15 @@ def send_application_docs_email(
             status_code=500,
             detail=f"Failed to send application docs email: {exc}"
         )
+
+    # Record that the docs email went out so no worker re-sends it.
+    try:
+        loan.docs_email_sent = True
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logging.error("Failed to persist docs email flag for loan %s: %s",
+                      getattr(loan, "id", None), exc)
 
     return {
         "success": True,

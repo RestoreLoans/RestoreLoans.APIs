@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, Date, Enum, ForeignKey, String
+from sqlalchemy import Column, Integer, Float, Date, Enum, ForeignKey, String, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
@@ -33,4 +33,8 @@ class Loan(Base):
     id_path = Column(String(900))
     bank_path = Column(String(900))
     proof_of_residence_path = Column(String(900))
+    # Set once the "New Loan Application" email (with the applicant's documents
+    # attached) has been sent to applicants@restoreloans.co.za. Persisted in the
+    # DB so it is shared across worker processes (in-memory guards are not).
+    docs_email_sent = Column(Boolean, nullable=True)
    

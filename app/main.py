@@ -19,6 +19,7 @@ import app.models as models
 # creates missing tables, so new columns on existing tables are added here.
 _EXTRA_COLUMNS = [
     "ALTER TABLE companies ADD COLUMN IF NOT EXISTS employment_status VARCHAR(20)",
+    "ALTER TABLE loans ADD COLUMN IF NOT EXISTS docs_email_sent BOOLEAN",
 ]
 
 

@@ -169,6 +169,7 @@ def create_loan(  loan_type: str = Form(...),
     # 2. Send application with documents to applicants@restoreloans.co.za
     #    (backend has direct access to uploaded file bytes — more reliable than
     #    re-downloading from GCS on the frontend).
+    docs_email_sent = False
     try:
         attachments = [
             (doc_bytes["id_document"], id_document.filename or "id_document"),
@@ -183,9 +184,23 @@ def create_loan(  loan_type: str = Form(...),
             to_emails=["applicants@restoreloans.co.za"],
             attachments=attachments,
         )
+        docs_email_sent = True
     except Exception as e:
         logging.error("Failed to send application email with docs for loan %s: %s",
                       new_loan.id, e)
+
+    # Persist the "sent" flag so the frontend's follow-up call to
+    # /loan-transactions/send-application-docs-email becomes a no-op and cannot
+    # produce a duplicate (attachment-less) "New Loan Application" email. The
+    # flag is only set after the send actually succeeded.
+    if docs_email_sent:
+        try:
+            new_loan.docs_email_sent = True
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logging.error("Failed to persist docs email flag for loan %s: %s",
+                          new_loan.id, e)
 
     return new_loan
 
