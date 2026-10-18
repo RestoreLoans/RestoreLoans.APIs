@@ -296,23 +296,22 @@ def get_loan_dashboard(user_id: int, db: Session = Depends(get_db)):
         if paid_months == 0:
             paid_months = len([t for t in loan_transactions if t.payment_date or t.date_time])
 
-        payments_total = sum(
-            (t.debit if t.debit is not None else (t.amount or 0)) for t in completed_payments
-        )
-
-        last_balance = None
         account_number = None
         for transaction in sorted(
             loan_transactions,
             key=lambda item: item.payment_date or item.date_time or datetime.min
         ):
-            if transaction.balance is not None:
-                last_balance = transaction.balance
             if transaction.account_number:
                 account_number = transaction.account_number
 
-        outstanding_balance = last_balance if last_balance is not None else max(loan.loan_amount - payments_total, 0)
         remaining_months = max((loan.loan_term or 0) - paid_months, 0)
+        # Outstanding Balance must include interest, so it is the repayments
+        # still outstanding: the stored installment already includes interest
+        # & fees (the quote payment). This matches the downloadable statement,
+        # which multiplies the installment by the remaining months.
+        outstanding_balance = max(
+            (loan.monthly_installment or 0) * remaining_months, 0
+        )
 
         user_loans.append(
             LoanDashboardLoan(
