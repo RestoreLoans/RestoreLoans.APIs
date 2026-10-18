@@ -201,6 +201,18 @@ def update_profile_picture(
     )
 
 
+@router.post("/profile/update")
+def update_profile_full(payload: RegisterPayload, db: Session = Depends(get_db)):
+    """Save the customer's full profile (client + employer + bank details)."""
+    return AuthService.update_profile_full(db, payload)
+
+
+@router.get("/update-eligibility")
+def update_eligibility(email: str, db: Session = Depends(get_db)):
+    """Whether the customer may edit their profile / refresh documents."""
+    return AuthService.update_eligibility(db, email)
+
+
 @router.post("/update-user-role")
 def update_user_role(
     role_data: UserForgotPassword, db: Session = Depends(get_db)

@@ -4,6 +4,8 @@ from app.database import get_db
 from app.models.loan import Loan
 from app.models.user import User
 from app.models.transaction import Transaction
+from app.models.loan_application import LoanApplication, STATUS_PENDING_APPROVAL
+from datetime import datetime as _dt, timezone as _tz
 from app.schemas.loan import LoanCreate, LoanResponse
 from app.schemas.loan_dashboard import LoanDashboardResponse, UserStats, LoanDashboardLoan, PaymentHistoryItem
 from google.cloud import storage
@@ -136,6 +138,19 @@ def create_loan(  loan_type: str = Form(...),
     db.commit()
     db.refresh(new_loan)
 
+    # Every new application starts as "Pending Approval" until a staff member
+    # (admin/manager) reviews it. Stored separately from the legacy enum column.
+    now = _dt.now(_tz.utc).replace(tzinfo=None)
+    db.add(
+        LoanApplication(
+            loan_id=new_loan.id,
+            status=STATUS_PENDING_APPROVAL,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
     borrower_name = f"{user.first_name} {user.last_name}".strip()
 
     # 1. Send acknowledgement email to the loan applicant.
@@ -211,10 +226,30 @@ def get_loan_dashboard(user_id: int, db: Session = Depends(get_db)):
     loans = db.query(Loan).filter(Loan.user_id == user_id).all()
     transactions = db.query(Transaction).filter(Transaction.user_id == user_id).all()
 
+    # Prefer the dedicated application status when present (new applications),
+    # falling back to the legacy loan.status mapping for older records.
+    application_status = {
+        app.loan_id: app.status
+        for app in db.query(LoanApplication)
+        .filter(LoanApplication.loan_id.in_([loan.id for loan in loans] or [-1]))
+        .all()
+    }
+
+    def _status_for(loan):
+        return application_status.get(loan.id) or _map_loan_status(loan.status)
+
     total_loans = len(loans)
-    mapped_statuses = [_map_loan_status(loan.status) for loan in loans]
-    active_loans = len([status for status in mapped_statuses if status in {"disbursed", "pending", "pending_approval"}])
-    completed_loans = len([status for status in mapped_statuses if status == "completed"])
+    mapped_statuses = [_status_for(loan) for loan in loans]
+    active_loans = len(
+        [
+            status
+            for status in mapped_statuses
+            if status in {"disbursed", "pending", "pending_approval", "approved"}
+        ]
+    )
+    completed_loans = len(
+        [status for status in mapped_statuses if status in {"completed", "paid"}]
+    )
     total_borrowed = sum(loan.loan_amount for loan in loans)
 
     user_name = f"{user.first_name} {user.last_name}".strip()
@@ -272,7 +307,7 @@ def get_loan_dashboard(user_id: int, db: Session = Depends(get_db)):
                 loanTerm=loan.loan_term,
                 monthlyPayment=loan.monthly_installment,
                 interestRate=loan.interest_rate,
-                status=_map_loan_status(loan.status),
+                status=_status_for(loan),
                 disburseDate=loan.start_date,
                 applicationDate=_get_application_date(loan),
                 outstandingBalance=outstanding_balance,

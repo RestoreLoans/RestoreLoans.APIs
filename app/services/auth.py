@@ -12,6 +12,10 @@ from ..models.company import Company
 from ..models.bank import BankDetail
 from ..models.password_reset import PasswordResetToken
 from ..models.profile_picture import UserProfilePicture
+from ..models.loan import Loan
+from ..models.document import Document
+from ..models.loan_application import LoanApplication, IN_PROGRESS_STATUSES
+from .roles import RoleService
 from ..schemas.user import UserCreate, UserResponse, RegisterPayload
 from ..schemas.company import CompanyCreate
 from ..schemas.bank import BankDetailCreate
@@ -35,6 +39,10 @@ RESET_OTP_RESEND_COOLDOWN_SECONDS = int(
     os.getenv("PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS", "60")
 )
 MIN_PASSWORD_LENGTH = int(os.getenv("MIN_PASSWORD_LENGTH", "8"))
+
+# Customers may only refresh their documents/profile details after this many
+# days from their last document upload or loan application.
+DOCUMENT_REFRESH_DAYS = int(os.getenv("DOCUMENT_REFRESH_DAYS", "90"))
 
 
 def _utcnow() -> datetime:
@@ -170,6 +178,7 @@ class AuthService:
             pay_method=employer.payMethod,
             pay_day_of_week=employer.payDayOfWeek,
             contract_end_date=contract_end_date,
+            employment_status=(getattr(employer, "employmentStatus", None) or None),
             user_id=db_user.id
         )
         db.add(db_company)
@@ -219,7 +228,13 @@ class AuthService:
             
 
         access_token = create_access_token(data={"sub": user.email})
-        return {"access_token": access_token, "token_type": "bearer","user": user}
+        role = RoleService.get_user_role(db, user)
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": user,
+            "role": role,
+        }
 
     @staticmethod
     def get_profile(db: Session, email: str):
@@ -276,6 +291,7 @@ class AuthService:
                 "payMethod": company.pay_method,
                 "payDayOfWeek": company.pay_day_of_week,
                 "contractEndDate": company.contract_end_date.isoformat() if company.contract_end_date else None,
+                "employmentStatus": company.employment_status,
             }
 
         bank_details = None
@@ -298,6 +314,185 @@ class AuthService:
             "employerDetails": employer_details,
             "bankDetails": bank_details,
         }
+
+    @staticmethod
+    def _parse_date(value):
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
+            return value
+        try:
+            return datetime.strptime(str(value).replace("/", "-"), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _in_progress_application(db: Session, user_id: int):
+        return (
+            db.query(LoanApplication)
+            .join(Loan, Loan.id == LoanApplication.loan_id)
+            .filter(
+                Loan.user_id == user_id,
+                LoanApplication.status.in_(IN_PROGRESS_STATUSES),
+            )
+            .first()
+        )
+
+    @staticmethod
+    def update_eligibility(db: Session, email: str):
+        """Report whether a customer may edit their profile / refresh documents."""
+        user = (
+            db.query(User)
+            .filter(User.email == (email or "").strip().lower())
+            .first()
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        in_progress = AuthService._in_progress_application(db, user.id)
+
+        # Newest document upload, falling back to the most recent loan
+        # application date (documents are attached to applications).
+        last_doc_date = None
+        latest_doc = (
+            db.query(Document)
+            .filter(Document.user_id == user.id)
+            .order_by(Document.upload_date.desc())
+            .first()
+        )
+        if latest_doc and latest_doc.upload_date:
+            last_doc_date = (
+                latest_doc.upload_date.date()
+                if isinstance(latest_doc.upload_date, datetime)
+                else latest_doc.upload_date
+            )
+        latest_loan = (
+            db.query(Loan)
+            .filter(Loan.user_id == user.id)
+            .order_by(Loan.created_at.desc())
+            .first()
+        )
+        if latest_loan and latest_loan.created_at:
+            loan_date = (
+                latest_loan.created_at.date()
+                if isinstance(latest_loan.created_at, datetime)
+                else latest_loan.created_at
+            )
+            if last_doc_date is None or loan_date > last_doc_date:
+                last_doc_date = loan_date
+
+        next_update_date = None
+        can_update_documents = True
+        if last_doc_date:
+            next_update_date = last_doc_date + timedelta(days=DOCUMENT_REFRESH_DAYS)
+            can_update_documents = (
+                datetime.now(timezone.utc).date() >= next_update_date
+            )
+
+        return {
+            "canUpdateProfile": not bool(in_progress),
+            "canUpdateDocuments": can_update_documents,
+            "inProgress": bool(in_progress),
+            "reason": (
+                "You cannot change your profile while a loan application is "
+                "still in progress."
+                if in_progress
+                else None
+            ),
+            "lastDocumentDate": last_doc_date.isoformat() if last_doc_date else None,
+            "nextUpdateDate": next_update_date.isoformat() if next_update_date else None,
+        }
+
+    @staticmethod
+    def update_profile_full(db: Session, payload):
+        """Update the customer's client, employer and bank details.
+
+        Refuses the change while a loan application is still in progress.
+        """
+        client = payload.clientDetails
+        employer = payload.employerDetails
+        bank = payload.bankDetails
+
+        user = db.query(User).filter(User.email == client.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if AuthService._in_progress_application(db, user.id):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "You cannot change your profile while a loan application "
+                    "is still in progress."
+                ),
+            )
+
+        user.first_name = client.name or user.first_name
+        user.last_name = client.surname or user.last_name
+        user.id_number = client.idNumber or user.id_number
+        user.phone_number = client.cellphoneNumber or user.phone_number
+        if client.gender:
+            user.gender = client.gender.lower()
+        user.title = client.title
+        user.homephone = client.homephone
+        user.home_add1 = client.homeAdd1
+        user.home_add2 = client.homeAdd2
+        user.suburb = client.suburb
+        user.town = client.town
+        user.postal_code = client.code
+        user.language = client.language
+        user.nationality = client.nationality
+        user.dob = AuthService._parse_date(client.dob)
+
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if company is None:
+            company = Company(user_id=user.id)
+            db.add(company)
+        company.name = employer.name
+        company.type = employer.type
+        company.pay_day_date = AuthService._parse_date(employer.payDayDate)
+        company.address1 = employer.address1
+        company.address2 = employer.address2
+        company.town = employer.town
+        company.suburb = employer.suburb
+        company.post_code = employer.postCode
+        company.phone = employer.phone
+        company.appointed_on_date = AuthService._parse_date(employer.appointedOnDate)
+        company.pay_date_shift = employer.payDateShift
+        company.contact_method = employer.contactMethod
+        company.salary_freq = employer.salaryFeq
+        company.pay_method = employer.payMethod
+        company.pay_day_of_week = employer.payDayOfWeek
+        company.contract_end_date = AuthService._parse_date(employer.contractEndDate)
+        if getattr(employer, "employmentStatus", None):
+            company.employment_status = employer.employmentStatus
+        db.flush()
+        user.company_id = company.id
+
+        allowed_types = {"savings", "current", "cheque"}
+        acct_type = (bank.account_type or "").lower()
+        bank_row = None
+        if user.bank_id:
+            bank_row = (
+                db.query(BankDetail).filter(BankDetail.id == user.bank_id).first()
+            )
+        if bank_row is None:
+            bank_row = BankDetail(account_type=acct_type if acct_type in allowed_types else "cheque")
+            db.add(bank_row)
+        elif acct_type in allowed_types:
+            bank_row.account_type = acct_type
+        bank_row.bank_name = bank.bank_name or bank_row.bank_name or "Unknown"
+        bank_row.branch_name = bank.branch_name
+        bank_row.branch_code = bank.branch_code
+        bank_row.account_holder_name = bank.account_holder_name
+        bank_row.account_number = bank.account_number or bank_row.account_number or "0"
+        db.flush()
+        user.bank_id = bank_row.id
+
+        db.commit()
+        db.refresh(user)
+        return AuthService.get_profile(db, user.email)
 
     @staticmethod
     def _hash_reset_otp(email: str, otp: str) -> str:

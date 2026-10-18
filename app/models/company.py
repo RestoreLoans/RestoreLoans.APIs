@@ -24,6 +24,8 @@ class Company(Base):
     pay_method = Column(String, nullable=True)
     pay_day_of_week = Column(Integer, nullable=True)
     contract_end_date = Column(Date, nullable=True)
+    # 'permanent', 'contract', or 'other'. Added via idempotent ALTER on startup.
+    employment_status = Column(String, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())

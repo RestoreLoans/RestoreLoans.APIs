@@ -41,6 +41,7 @@ class EmployerDetails(BaseModel):
     payMethod: Optional[str] = None
     payDayOfWeek: Optional[int] = None
     contractEndDate: Optional[str] = None
+    employmentStatus: Optional[str] = None  # 'permanent' | 'contract' | 'other'
 
 class BankDetails(BaseModel):
     bank_name: str

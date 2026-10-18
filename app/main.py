@@ -3,8 +3,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from app.routes.loan_transaction import router as loan_transaction_router
-from app.routes import auth, user, userRoles, company, loan, bank, document, history, alert, sms, transaction
+from app.routes import auth, user, userRoles, company, loan, bank, document, history, alert, sms, transaction, admin
 from app.database import engine, Base
+from sqlalchemy import text
 import logging
 import asyncio
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,12 +15,29 @@ import app.models as models
 #Base.metadata.drop_all(bind=engine)   # Deletes all tables
 
 
+# Idempotent column additions for tables that already exist. `create_all` only
+# creates missing tables, so new columns on existing tables are added here.
+_EXTRA_COLUMNS = [
+    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS employment_status VARCHAR(20)",
+]
+
+
+def _ensure_extra_columns():
+    with engine.begin() as conn:
+        for statement in _EXTRA_COLUMNS:
+            conn.execute(text(statement))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     except Exception as e:
         logging.error("Database unavailable on startup: %s", e)
+    try:
+        await asyncio.to_thread(_ensure_extra_columns)
+    except Exception as e:
+        logging.error("Could not apply column migrations on startup: %s", e)
     try:
         yield
     except asyncio.CancelledError:
@@ -64,6 +82,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(loan_transaction.router)
 app.include_router(user.router)
 app.include_router(userRoles.router)

@@ -1,0 +1,225 @@
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.user import User
+from app.models.company import Company
+from app.models.loan import Loan
+from app.models.document import Document
+from app.models.loan_application import (
+    LoanApplication,
+    VALID_APPLICATION_STATUSES,
+)
+from app.models.user_role_assignment import ROLE_ADMIN, ROLE_MANAGER, ROLE_VIEWER
+from app.schemas.admin import (
+    UpdateApplicationStatusRequest,
+    AssignRoleRequest,
+)
+from app.services.roles import RoleService
+
+router = APIRouter(prefix="/admin", tags=["Admin"])
+
+STAFF_ROLES = {ROLE_ADMIN, ROLE_MANAGER, ROLE_VIEWER}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _format_loan_id(loan_id: int) -> str:
+    return f"LOAN{loan_id:03d}"
+
+
+def _map_legacy_status(status_value) -> str:
+    if not status_value:
+        return "pending"
+    normalized = (
+        str(status_value.value).lower()
+        if hasattr(status_value, "value")
+        else str(status_value).lower()
+    )
+    if normalized == "active":
+        return "disbursed"
+    if normalized == "paid":
+        return "completed"
+    if normalized == "default":
+        return "defaulted"
+    return normalized
+
+
+def _resolve_status(loan: Loan, app: Optional[LoanApplication]) -> str:
+    if app and app.status:
+        return app.status
+    return _map_legacy_status(loan.status)
+
+
+def _documents_for_loan(loan: Loan, db: Session) -> List[dict]:
+    docs = []
+    if loan.id_path:
+        docs.append({"name": "ID Document", "url": loan.id_path})
+    if loan.bank_path:
+        docs.append({"name": "Bank Statement", "url": loan.bank_path})
+    if loan.proof_of_residence_path:
+        docs.append({"name": "Proof of Residence", "url": loan.proof_of_residence_path})
+    rows = db.query(Document).filter(Document.loan_id == loan.id).all()
+    for row in rows:
+        docs.append({"name": row.document_name or row.file_name, "url": row.file_path})
+    return docs
+
+
+def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApplication], db: Session) -> dict:
+    company = getattr(user, "company", None) if user else None
+    return {
+        "id": _format_loan_id(loan.id),
+        "loanId": loan.id,
+        "userId": loan.user_id,
+        "customerName": f"{user.first_name} {user.last_name}".strip() if user else "",
+        "email": user.email if user else None,
+        "phone": user.phone_number if user else None,
+        "idNumber": user.id_number if user else None,
+        "loanAmount": loan.loan_amount,
+        "loanTerm": loan.loan_term,
+        "monthlyInstallment": loan.monthly_installment,
+        "interestRate": loan.interest_rate,
+        "loanType": loan.loan_type,
+        "status": _resolve_status(loan, app),
+        "applicationDate": loan.created_at.isoformat() if loan.created_at else None,
+        "disburseDate": loan.start_date.isoformat() if loan.start_date else None,
+        "endDate": loan.end_date.isoformat() if loan.end_date else None,
+        "employmentStatus": getattr(company, "employment_status", None) if company else None,
+        "employerName": company.name if company else None,
+        "decidedBy": app.decided_by if app else None,
+        "decidedAt": app.decided_at.isoformat() if app and app.decided_at else None,
+        "notes": app.notes if app else None,
+        "documents": _documents_for_loan(loan, db),
+    }
+
+
+@router.get("/me")
+def admin_me(email: str, db: Session = Depends(get_db)):
+    role = RoleService.get_role_by_email(db, email)
+    return {
+        "email": email,
+        "role": role,
+        "isStaff": role in STAFF_ROLES,
+        "permissions": {
+            "view": role in STAFF_ROLES,
+            "manage": role == ROLE_ADMIN,
+            "review": role in {ROLE_ADMIN, ROLE_MANAGER},
+        },
+    }
+
+
+@router.get("/applications")
+def list_applications(email: str, db: Session = Depends(get_db)):
+    role = RoleService.require_role(db, email, STAFF_ROLES)
+
+    loans = db.query(Loan).order_by(Loan.id.desc()).all()
+    users = {u.id: u for u in db.query(User).all()}
+    apps = {
+        a.loan_id: a
+        for a in db.query(LoanApplication).all()
+    }
+
+    data = [
+        _application_payload(loan, users.get(loan.user_id), apps.get(loan.id), db)
+        for loan in loans
+    ]
+    return {"role": role, "applications": data}
+
+
+@router.get("/applications/{loan_id}")
+def get_application(loan_id: int, email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, STAFF_ROLES)
+
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Application not found."
+        )
+    user = db.query(User).filter(User.id == loan.user_id).first()
+    app = db.query(LoanApplication).filter(LoanApplication.loan_id == loan.id).first()
+    return _application_payload(loan, user, app, db)
+
+
+@router.post("/applications/{loan_id}/status")
+def update_application_status(
+    loan_id: int, body: UpdateApplicationStatusRequest, db: Session = Depends(get_db)
+):
+    role = RoleService.require_role(db, body.email, {ROLE_ADMIN, ROLE_MANAGER})
+
+    new_status = (body.status or "").strip().lower()
+    if new_status not in VALID_APPLICATION_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Allowed: {', '.join(sorted(VALID_APPLICATION_STATUSES))}",
+        )
+
+    if not RoleService.can_set_status(role, new_status):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your role cannot set this application status.",
+        )
+
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Application not found."
+        )
+
+    app = db.query(LoanApplication).filter(LoanApplication.loan_id == loan.id).first()
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This loan has no application record to update.",
+        )
+
+    app.status = new_status
+    app.decided_by = body.email
+    app.decided_at = _utcnow()
+    if body.notes is not None:
+        app.notes = body.notes
+    app.updated_at = _utcnow()
+    db.commit()
+    db.refresh(app)
+
+    user = db.query(User).filter(User.id == loan.user_id).first()
+    return _application_payload(loan, user, app, db)
+
+
+@router.delete("/applications/{loan_id}", status_code=status.HTTP_200_OK)
+def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, {ROLE_ADMIN})
+
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Application not found."
+        )
+    db.query(LoanApplication).filter(LoanApplication.loan_id == loan.id).delete(
+        synchronize_session=False
+    )
+    db.delete(loan)
+    db.commit()
+    return {"message": f"Application {_format_loan_id(loan_id)} deleted."}
+
+
+@router.get("/staff")
+def list_staff(email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, {ROLE_ADMIN})
+    return {"staff": RoleService.list_staff(db)}
+
+
+@router.post("/staff/role")
+def assign_role(body: AssignRoleRequest, db: Session = Depends(get_db)):
+    RoleService.require_role(db, body.email, {ROLE_ADMIN})
+    target = db.query(User).filter(User.email == body.target_email.strip().lower()).first()
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
+    role = RoleService.set_role(db, target, body.role)
+    return {"message": f"{target.email} is now '{role}'.", "role": role}
