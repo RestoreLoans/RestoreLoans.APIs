@@ -16,7 +16,7 @@ from ..models.loan import Loan
 from ..models.document import Document
 from ..models.loan_application import LoanApplication, IN_PROGRESS_STATUSES
 from .roles import RoleService
-from ..schemas.user import UserCreate, UserResponse, RegisterPayload
+from ..schemas.user import UserCreate, UserResponse, RegisterPayload, ProfileUpdatePayload
 from ..schemas.company import CompanyCreate
 from ..schemas.bank import BankDetailCreate
 from ..utils.security import create_access_token, verify_password, get_password_hash
@@ -406,7 +406,7 @@ class AuthService:
         }
 
     @staticmethod
-    def update_profile_full(db: Session, payload):
+    def update_profile_full(db: Session, payload: ProfileUpdatePayload):
         """Update the customer's client, employer and bank details.
 
         Refuses the change while a loan application is still in progress.
@@ -443,7 +443,10 @@ class AuthService:
         user.postal_code = client.code
         user.language = client.language
         user.nationality = client.nationality
-        user.dob = AuthService._parse_date(client.dob)
+        # Only overwrite the date of birth when one was submitted, so a blank
+        # field on the edit form cannot silently wipe the stored value.
+        if client.dob is not None:
+            user.dob = AuthService._parse_date(client.dob)
 
         company = db.query(Company).filter(Company.user_id == user.id).first()
         if company is None:

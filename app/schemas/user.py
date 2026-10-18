@@ -59,6 +59,24 @@ class RegisterPayload(BaseModel):
     employerDetails: EmployerDetails
     bankDetails: BankDetails
 
+
+class ProfileClientDetails(ClientDetails):
+    """Client details as posted by the profile edit form.
+
+    Editing an existing profile does not collect a password (or always a
+    gender), so those registration-only fields are optional here. The frontend
+    also strips empty values from the payload, so they must not be required.
+    """
+
+    password: Optional[str] = None
+    gender: Optional[str] = None
+
+
+class ProfileUpdatePayload(BaseModel):
+    clientDetails: ProfileClientDetails
+    employerDetails: EmployerDetails
+    bankDetails: BankDetails
+
 class UserBase(BaseModel):
     first_name: str
     last_name: str

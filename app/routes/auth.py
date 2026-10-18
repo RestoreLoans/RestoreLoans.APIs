@@ -10,6 +10,7 @@ from app.schemas.user import (
     UserForgotUsername,
     UserResponse,
     RegisterPayload,
+    ProfileUpdatePayload,
     ForgotPasswordRequest,
     VerifyResetOtpRequest,
     ResetPasswordRequest,
@@ -202,7 +203,7 @@ def update_profile_picture(
 
 
 @router.post("/profile/update")
-def update_profile_full(payload: RegisterPayload, db: Session = Depends(get_db)):
+def update_profile_full(payload: ProfileUpdatePayload, db: Session = Depends(get_db)):
     """Save the customer's full profile (client + employer + bank details)."""
     return AuthService.update_profile_full(db, payload)
 
