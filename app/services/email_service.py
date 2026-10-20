@@ -20,11 +20,6 @@ load_env()
 
 
 class EmailService:
-    # The internal "New Loan Application" review email to
-    # applicants@restoreloans.co.za goes out over the company's own SMTP
-    # account; every other email uses the external Gmail account.
-    DOCS_EMAIL_PROFILE = "restoreloans"
-
     def _from_header(self, sender_email):
         name = os.getenv("SENDER_NAME")
         if name:
@@ -32,6 +27,19 @@ class EmailService:
         return sender_email
 
     def __init__(self):
+        # SMTP profile for the internal "New Loan Application" review email to
+        # applicants@restoreloans.co.za. It defaults to the external Gmail
+        # account: the domain's real inbox path runs through the Ucebox MX
+        # (mx...ucebox.co.za), while mail submitted to mail.restoreloans.co.za
+        # for its own domain is kept in that server's local store and never
+        # reaches the mailbox the team reads — so company-SMTP sends are
+        # accepted (250) but stay invisible. Set DOCS_EMAIL_SMTP_PROFILE to
+        # "restoreloans" to send it over the company account once that server
+        # relays through the domain MX (and 102.222.124.10 is authorised in
+        # Ucebox).
+        self.DOCS_EMAIL_PROFILE = (
+            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "external") or "external"
+        ).strip().lower()
         self._load_profiles()
         # Backwards-compatible aliases pointing at the external profile.
         self.smtp_server = self.profiles["external"]["smtp_server"]
@@ -91,11 +99,12 @@ class EmailService:
                     or os.getenv("FALLBACK_SENDER_EMAIL")
                 ),
             }
-            # Company SMTP account (mail.restoreloans.co.za) used for the
-            # "New Loan Application" review email. Dedicated RESTORELOANS_*
-            # variables win; otherwise the FALLBACK_* settings describe the
-            # same server, so they are reused.
-            self.profiles[self.DOCS_EMAIL_PROFILE] = {
+            # Company SMTP account (mail.restoreloans.co.za), always registered
+            # as the "restoreloans" profile (independent of which profile the
+            # docs email is routed through). Dedicated RESTORELOANS_* variables
+            # win; otherwise the FALLBACK_* settings describe the same server,
+            # so they are reused.
+            self.profiles["restoreloans"] = {
                 "smtp_server": (
                     os.getenv("RESTORELOANS_SMTP_SERVER") or fallback_server
                 ),
@@ -268,7 +277,7 @@ class EmailService:
             return True
         except Exception as e:
             fallback_name = (
-                "external" if profile == self.DOCS_EMAIL_PROFILE else "fallback"
+                "external" if profile == "restoreloans" else "fallback"
             )
             fallback = self.profiles.get(fallback_name)
             if fallback is not None and fallback is not p:
@@ -729,8 +738,9 @@ class EmailService:
             ]
         )
         recipients = to_emails or ["applicants@restoreloans.co.za"]
-        # Review mail leaves from the company mailbox (RestoreLoans SMTP),
-        # not the Gmail account used by every other notification.
+        # Profile for the review mail is switchable (see __init__); it defaults
+        # to the Gmail account because that is the path that reaches the
+        # mailbox the team reads.
         result = self.send_email(
             recipients, subject, body,
             attachments=attachments,
