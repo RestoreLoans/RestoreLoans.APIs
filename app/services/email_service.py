@@ -38,6 +38,14 @@ class EmailService:
         self.DOCS_EMAIL_PROFILE = (
             os.getenv("DOCS_EMAIL_SMTP_PROFILE", "restoreloans") or "restoreloans"
         ).strip().lower()
+        # Hard ceiling for any archive attached to outgoing mail. Images are
+        # recompressed until the packed ZIP fits under this limit; the default
+        # of 5 MB matches the mailbox attachment limit.
+        try:
+            cap_mb = int(os.getenv("EMAIL_MAX_ATTACHMENT_MB", "5"))
+        except ValueError:
+            cap_mb = 5
+        self.max_attachment_bytes = max(1, cap_mb) * 1024 * 1024
         self._load_profiles()
         # Backwards-compatible aliases pointing at the external profile.
         self.smtp_server = self.profiles["external"]["smtp_server"]
@@ -146,6 +154,19 @@ class EmailService:
         )
         return name or fallback
 
+    # (max edge in px, JPEG quality) reduction steps, applied one at a time
+    # to the largest remaining image until the packed archive fits the cap.
+    _REDUCTION_STEPS = [
+        (2400, 82),
+        (2000, 78),
+        (1800, 70),
+        (1600, 62),
+        (1400, 54),
+        (1280, 46),
+        (1152, 38),
+        (1024, 30),
+    ]
+
     def _pack_attachments(self, attachments):
         """Bundle every attachment into one ZIP archive before sending.
 
@@ -153,6 +174,11 @@ class EmailService:
         each MIME part is base64-encoded on the wire (adding ~33%). Packing
         them into a single compressed archive keeps the message inside
         mailbox upload limits and gives the recipient one file to download.
+
+        The archive is guaranteed to stay under ``max_attachment_bytes``
+        (5 MB by default) whenever the content is reducible: images are
+        progressively downscaled/re-encoded, largest first, until the
+        packed size fits.
         """
         if not attachments:
             return attachments
@@ -160,7 +186,36 @@ class EmailService:
         if len(attachments) == 1:
             name = str(attachments[0][1] or "")
             if name.lower().endswith(".zip"):
+                size = len(attachments[0][0] or b"")
+                if size > self.max_attachment_bytes:
+                    logging.warning(
+                        "Pre-built ZIP attachment %s is %s MB, over the %s MB "
+                        "limit; it cannot be reduced further",
+                        name,
+                        round(size / (1024 * 1024), 2),
+                        self.max_attachment_bytes // (1024 * 1024),
+                    )
                 return attachments
+        packed = self._zip_attachments(attachments)
+        if len(packed) > self.max_attachment_bytes:
+            logging.info(
+                "Attachments total %s MB; recompressing images to fit the "
+                "%s MB limit",
+                round(len(packed) / (1024 * 1024), 2),
+                self.max_attachment_bytes // (1024 * 1024),
+            )
+            attachments = self._reduce_attachments(attachments)
+            packed = self._zip_attachments(attachments)
+            if len(packed) > self.max_attachment_bytes:
+                logging.warning(
+                    "Attachments still %s MB after image reduction (limit "
+                    "%s MB); sending anyway",
+                    round(len(packed) / (1024 * 1024), 2),
+                    self.max_attachment_bytes // (1024 * 1024),
+                )
+        return [(packed, "application_documents.zip")]
+
+    def _zip_attachments(self, attachments):
         buf = io.BytesIO()
         taken = set()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -174,7 +229,88 @@ class EmailService:
                     counter += 1
                 taken.add(candidate)
                 archive.writestr(candidate, file_bytes or b"")
-        return [(buf.getvalue(), "application_documents.zip")]
+        return buf.getvalue()
+
+    @staticmethod
+    def _is_image_attachment(filename):
+        ext = os.path.splitext(str(filename or ""))[1].lower()
+        return ext in {
+            ".jpg", ".jpeg", ".png", ".webp", ".bmp",
+            ".tif", ".tiff", ".gif", ".heic", ".heif",
+        }
+
+    @staticmethod
+    def _flatten_to_rgb(img):
+        from PIL import Image
+
+        if img.mode in ("RGB", "L"):
+            return img
+        if img.mode in ("RGBA", "LA"):
+            rgba = img.convert("RGBA")
+            bg = Image.new("RGB", rgba.size, (255, 255, 255))
+            bg.paste(rgba, mask=rgba.split()[-1])
+            return bg
+        return img.convert("RGB")
+
+    def _shrink_image(self, file_bytes, filename, max_edge, quality):
+        """Re-encode one image at the given size/quality ceiling.
+
+        Returns the reduced (bytes, filename) tuple — possibly renamed to
+        ``.jpg`` when the source format is converted — or the original entry
+        when Pillow cannot process it or the result would not be smaller.
+        """
+        name = str(filename or "image")
+        try:
+            from PIL import Image, ImageOps
+
+            img = Image.open(io.BytesIO(file_bytes))
+            fmt = (img.format or "").upper()
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+            stem, _ext = os.path.splitext(name)
+            out = io.BytesIO()
+            if fmt in ("JPEG", "JPG") and img.mode in ("RGB", "L"):
+                img.save(
+                    out, format="JPEG", quality=quality,
+                    optimize=True, progressive=True,
+                )
+            else:
+                # PNG photos, scans and exotic formats compress far better as
+                # JPEG; alpha (if any) is flattened onto white first.
+                self._flatten_to_rgb(img).save(
+                    out, format="JPEG", quality=quality,
+                    optimize=True, progressive=True,
+                )
+                if not name.lower().endswith((".jpg", ".jpeg")):
+                    name = stem + ".jpg"
+            result = out.getvalue()
+            if not result or len(result) >= len(file_bytes):
+                return (file_bytes, filename)
+            return (result, name)
+        except Exception as exc:
+            logging.warning("Could not recompress attachment %s: %s", name, exc)
+            return (file_bytes, filename)
+
+    def _reduce_attachments(self, attachments):
+        """Shrink images (largest first) until the packed size fits the cap."""
+        current = list(attachments)
+        steps_used = {}
+        while len(self._zip_attachments(current)) > self.max_attachment_bytes:
+            shrinkable = [
+                (len(data or b""), index)
+                for index, (data, name) in enumerate(current)
+                if self._is_image_attachment(name)
+                and steps_used.get(index, 0) < len(self._REDUCTION_STEPS)
+            ]
+            if not shrinkable:
+                return current
+            _, index = max(shrinkable)
+            step = steps_used.get(index, 0)
+            steps_used[index] = step + 1
+            current[index] = self._shrink_image(
+                *current[index], *self._REDUCTION_STEPS[step]
+            )
+        return current
 
     def send_email(
         self,
