@@ -28,17 +28,15 @@ class EmailService:
 
     def __init__(self):
         # SMTP profile for the internal "New Loan Application" review email to
-        # applicants@restoreloans.co.za. It defaults to the external Gmail
-        # account: the domain's real inbox path runs through the Ucebox MX
-        # (mx...ucebox.co.za), while mail submitted to mail.restoreloans.co.za
-        # for its own domain is kept in that server's local store and never
-        # reaches the mailbox the team reads — so company-SMTP sends are
-        # accepted (250) but stay invisible. Set DOCS_EMAIL_SMTP_PROFILE to
-        # "restoreloans" to send it over the company account once that server
-        # relays through the domain MX (and 102.222.124.10 is authorised in
-        # Ucebox).
+        # applicants@restoreloans.co.za. It defaults to the company account
+        # (mail.restoreloans.co.za): that is where the applicants@ mailbox
+        # lives (verified over IMAP — mail sent this way is delivered straight
+        # into its INBOX), while mail routed via Gmail leaves through the
+        # domain's Ucebox MX and never reaches that store. Every other
+        # notification keeps using the external Gmail account. Set
+        # DOCS_EMAIL_SMTP_PROFILE to "external" to flip just this one email.
         self.DOCS_EMAIL_PROFILE = (
-            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "external") or "external"
+            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "restoreloans") or "restoreloans"
         ).strip().lower()
         self._load_profiles()
         # Backwards-compatible aliases pointing at the external profile.
@@ -738,9 +736,8 @@ class EmailService:
             ]
         )
         recipients = to_emails or ["applicants@restoreloans.co.za"]
-        # Profile for the review mail is switchable (see __init__); it defaults
-        # to the Gmail account because that is the path that reaches the
-        # mailbox the team reads.
+        # Company SMTP by default (see DOCS_EMAIL_PROFILE): this delivers
+        # straight into the applicants@ mailbox, verified over IMAP.
         result = self.send_email(
             recipients, subject, body,
             attachments=attachments,
