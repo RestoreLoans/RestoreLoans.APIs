@@ -228,6 +228,8 @@ def send_loan_email(
         }
     
     except Exception as e:
+        logging.exception("Failed to send email for transaction %s",
+                          email_data.transaction_id)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to send email: {str(e)}"
@@ -287,6 +289,8 @@ def send_application_docs_email(
             to_emails=recipients,
         )
     except Exception as exc:
+        logging.exception("Failed to send application docs email for transaction %s",
+                          transaction_id)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to send application docs email: {exc}"

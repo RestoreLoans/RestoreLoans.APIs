@@ -163,8 +163,8 @@ def create_loan(  loan_type: str = Form(...),
                 to_emails=[user.email],
             )
     except Exception as e:
-        logging.error("Failed to send applicant acknowledgement email for loan %s: %s",
-                      new_loan.id, e)
+        logging.exception("Failed to send applicant acknowledgement email for loan %s",
+                          new_loan.id)
 
     # 2. Send application with documents to applicants@restoreloans.co.za
     #    (backend has direct access to uploaded file bytes — more reliable than
@@ -186,8 +186,8 @@ def create_loan(  loan_type: str = Form(...),
         )
         docs_email_sent = True
     except Exception as e:
-        logging.error("Failed to send application email with docs for loan %s: %s",
-                      new_loan.id, e)
+        logging.exception("Failed to send application email with docs for loan %s",
+                          new_loan.id)
 
     # Persist the "sent" flag so the frontend's follow-up call to
     # /loan-transactions/send-application-docs-email becomes a no-op and cannot
