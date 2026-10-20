@@ -1,6 +1,8 @@
 import smtplib
 import logging
 import threading
+import io
+import zipfile
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -89,6 +91,44 @@ class EmailService:
     def sender_header(self):
         return self._from_header(self.sender_email)
 
+    @staticmethod
+    def _safe_attachment_name(filename, fallback="document"):
+        name = os.path.basename(str(filename or "").replace("\\", "/")).strip()
+        name = "".join(
+            ch for ch in name if ch.isprintable() and ch not in '"<>|:*?'
+        )
+        return name or fallback
+
+    def _pack_attachments(self, attachments):
+        """Bundle every attachment into one ZIP archive before sending.
+
+        Uploaded application documents are multi-megabyte scans/photos, and
+        each MIME part is base64-encoded on the wire (adding ~33%). Packing
+        them into a single compressed archive keeps the message inside
+        mailbox upload limits and gives the recipient one file to download.
+        """
+        if not attachments:
+            return attachments
+        # An archive that is already a ZIP is attached as-is.
+        if len(attachments) == 1:
+            name = str(attachments[0][1] or "")
+            if name.lower().endswith(".zip"):
+                return attachments
+        buf = io.BytesIO()
+        taken = set()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
+            for file_bytes, filename in attachments:
+                name = self._safe_attachment_name(filename)
+                stem, ext = os.path.splitext(name)
+                candidate = name
+                counter = 1
+                while candidate in taken:
+                    candidate = f"{stem} ({counter}){ext}"
+                    counter += 1
+                taken.add(candidate)
+                archive.writestr(candidate, file_bytes or b"")
+        return [(buf.getvalue(), "application_documents.zip")]
+
     def send_email(
         self,
         to_emails: List[str],
@@ -101,6 +141,16 @@ class EmailService:
     ) -> bool:
         if not to_emails:
             raise Exception("No recipient emails provided")
+
+        # Compress attachments automatically before the message is built, so
+        # every send path ships a single ZIP instead of raw multi-MB files.
+        if attachments:
+            try:
+                attachments = self._pack_attachments(attachments)
+            except Exception:
+                logging.exception(
+                    "Could not compress attachments; sending them uncompressed"
+                )
 
         p = self.profiles.get(profile, self.profiles["external"])
         content_type = "html" if is_html else "plain"
@@ -616,7 +666,8 @@ class EmailService:
                 *self._build_details_html(client, employer, bank, loan),
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
-                "proof of residence) are attached to this email.</p>",
+                "proof of residence) are attached to this email as a single "
+                "compressed ZIP archive (application_documents.zip).</p>",
                 "    <br>",
                 "    <p>Best regards,<br><strong>"
                 "RestoreLoans System</strong></p>",
