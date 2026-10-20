@@ -20,6 +20,11 @@ load_env()
 
 
 class EmailService:
+    # The internal "New Loan Application" review email to
+    # applicants@restoreloans.co.za goes out over the company's own SMTP
+    # account; every other email uses the external Gmail account.
+    DOCS_EMAIL_PROFILE = "restoreloans"
+
     def _from_header(self, sender_email):
         name = os.getenv("SENDER_NAME")
         if name:
@@ -83,6 +88,41 @@ class EmailService:
                 "sender_name": os.getenv("FALLBACK_SENDER_NAME"),
                 "envelope_sender": (
                     os.getenv("FALLBACK_MAIL_FROM")
+                    or os.getenv("FALLBACK_SENDER_EMAIL")
+                ),
+            }
+            # Company SMTP account (mail.restoreloans.co.za) used for the
+            # "New Loan Application" review email. Dedicated RESTORELOANS_*
+            # variables win; otherwise the FALLBACK_* settings describe the
+            # same server, so they are reused.
+            self.profiles[self.DOCS_EMAIL_PROFILE] = {
+                "smtp_server": (
+                    os.getenv("RESTORELOANS_SMTP_SERVER") or fallback_server
+                ),
+                "smtp_port": int(
+                    os.getenv("RESTORELOANS_SMTP_PORT")
+                    or os.getenv("FALLBACK_SMTP_PORT", "587")
+                ),
+                "smtp_username": (
+                    os.getenv("RESTORELOANS_SMTP_USERNAME")
+                    or os.getenv("FALLBACK_SMTP_USERNAME")
+                ),
+                "smtp_password": (
+                    os.getenv("RESTORELOANS_SMTP_PASSWORD")
+                    or os.getenv("FALLBACK_SMTP_PASSWORD")
+                ),
+                "sender_email": (
+                    os.getenv("RESTORELOANS_SENDER_EMAIL")
+                    or os.getenv("FALLBACK_SENDER_EMAIL")
+                ),
+                "sender_name": (
+                    os.getenv("RESTORELOANS_SENDER_NAME")
+                    or os.getenv("FALLBACK_SENDER_NAME")
+                    or os.getenv("SENDER_NAME")
+                ),
+                "envelope_sender": (
+                    os.getenv("RESTORELOANS_MAIL_FROM")
+                    or os.getenv("FALLBACK_MAIL_FROM")
                     or os.getenv("FALLBACK_SENDER_EMAIL")
                 ),
             }
@@ -152,7 +192,15 @@ class EmailService:
                     "Could not compress attachments; sending them uncompressed"
                 )
 
-        p = self.profiles.get(profile, self.profiles["external"])
+        p = self.profiles.get(profile)
+        if p is None:
+            if profile != "external":
+                logging.warning(
+                    "SMTP profile '%s' is not configured (missing environment "
+                    "variables); sending via the external Gmail account instead",
+                    profile,
+                )
+            p = self.profiles["external"]
         content_type = "html" if is_html else "plain"
 
         def _build_message(sender_name, sender_email, to_list):
@@ -210,20 +258,25 @@ class EmailService:
                     raise Exception(f"Failed to send email: {str(last_err)}")
             return True
 
-        # Single send: build once for the selected profile, fall back to Gmail
-        # only if the primary raises at the connection/SMTP level.
+        # Single send: build once for the selected profile, and fail over to
+        # the other configured account only if the primary raises at the
+        # connection/SMTP level (RestoreLoans SMTP <-> Gmail).
         message = _build_message(p["sender_name"] or "", p["sender_email"], to_emails)
         flat = message.as_string()
         try:
             self._send_via_profile(p, flat, to_emails)
             return True
         except Exception as e:
-            fallback = self.profiles.get("fallback")
+            fallback_name = (
+                "external" if profile == self.DOCS_EMAIL_PROFILE else "fallback"
+            )
+            fallback = self.profiles.get(fallback_name)
             if fallback is not None and fallback is not p:
                 try:
                     self._send_via_profile(fallback, flat, to_emails)
                     logging.warning(
-                        "Primary SMTP failed (%s); message sent via fallback", e
+                        "SMTP profile '%s' failed (%s); message sent via '%s'",
+                        profile, e, fallback_name,
                     )
                     return True
                 except Exception as fb_err:
@@ -676,9 +729,12 @@ class EmailService:
             ]
         )
         recipients = to_emails or ["applicants@restoreloans.co.za"]
+        # Review mail leaves from the company mailbox (RestoreLoans SMTP),
+        # not the Gmail account used by every other notification.
         result = self.send_email(
             recipients, subject, body,
             attachments=attachments,
+            profile=self.DOCS_EMAIL_PROFILE,
         )
         if loan_id is not None:
             self._new_application_sent.add(loan_id)
