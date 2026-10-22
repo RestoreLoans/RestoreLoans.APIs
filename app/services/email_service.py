@@ -11,6 +11,8 @@ from email.utils import formatdate, make_msgid
 from typing import List, Optional, IO
 import enum as _enum
 import os
+import re
+import unicodedata
 
 from app.env_loader import load_env
 
@@ -154,6 +156,24 @@ class EmailService:
         )
         return name or fallback
 
+    @staticmethod
+    def _application_archive_name(client):
+        """Name the attached archive after the applicant.
+
+        ``Thandi Mokoena`` becomes ``Thandi_Mokoena_application_documents.zip``;
+        the generic name is used when no usable name is available.
+        """
+        first = str(getattr(client, "first_name", "") or "")
+        last = str(getattr(client, "last_name", "") or "")
+        full = " ".join(part for part in (first.strip(), last.strip()) if part)
+        ascii_name = (
+            unicodedata.normalize("NFKD", full)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        slug = re.sub(r"[^A-Za-z0-9-]+", "_", ascii_name).strip("_-")
+        return f"{slug}_application_documents.zip" if slug else "application_documents.zip"
+
     # (max edge in px, JPEG quality) reduction steps, applied one at a time
     # to the largest remaining image until the packed archive fits the cap.
     _REDUCTION_STEPS = [
@@ -167,7 +187,7 @@ class EmailService:
         (1024, 30),
     ]
 
-    def _pack_attachments(self, attachments):
+    def _pack_attachments(self, attachments, archive_name=None):
         """Bundle every attachment into one ZIP archive before sending.
 
         Uploaded application documents are multi-megabyte scans/photos, and
@@ -179,6 +199,9 @@ class EmailService:
         (5 MB by default) whenever the content is reducible: images are
         progressively downscaled/re-encoded, largest first, until the
         packed size fits.
+
+        ``archive_name`` sets the attached file name (e.g.
+        ``Thandi_Mokoena_application_documents.zip``).
         """
         if not attachments:
             return attachments
@@ -213,7 +236,15 @@ class EmailService:
                     round(len(packed) / (1024 * 1024), 2),
                     self.max_attachment_bytes // (1024 * 1024),
                 )
-        return [(packed, "application_documents.zip")]
+        return [
+            (
+                packed,
+                self._safe_attachment_name(
+                    archive_name or "application_documents.zip",
+                    fallback="application_documents.zip",
+                ),
+            )
+        ]
 
     def _zip_attachments(self, attachments):
         buf = io.BytesIO()
@@ -321,6 +352,7 @@ class EmailService:
         attachments: Optional[List[tuple]] = None,
         profile: str = "external",
         profile_names: Optional[List[str]] = None,
+        attachment_archive_name: Optional[str] = None,
     ) -> bool:
         if not to_emails:
             raise Exception("No recipient emails provided")
@@ -329,7 +361,9 @@ class EmailService:
         # every send path ships a single ZIP instead of raw multi-MB files.
         if attachments:
             try:
-                attachments = self._pack_attachments(attachments)
+                attachments = self._pack_attachments(
+                    attachments, archive_name=attachment_archive_name
+                )
             except Exception:
                 logging.exception(
                     "Could not compress attachments; sending them uncompressed"
@@ -848,6 +882,7 @@ class EmailService:
             attachments = self._download_document_attachments(loan)
 
         subject = "New Loan Application"
+        archive_name = self._application_archive_name(client)
 
         body = "\n".join(
             [
@@ -863,7 +898,7 @@ class EmailService:
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
                 "proof of residence) are attached to this email as a single "
-                "compressed ZIP archive (application_documents.zip).</p>",
+                f"compressed ZIP archive ({archive_name}).</p>",
                 "    <br>",
                 "    <p>Best regards,<br><strong>"
                 "RestoreLoans System</strong></p>",
@@ -878,6 +913,7 @@ class EmailService:
             recipients, subject, body,
             attachments=attachments,
             profile=self.DOCS_EMAIL_PROFILE,
+            attachment_archive_name=archive_name,
         )
         if loan_id is not None:
             self._new_application_sent.add(loan_id)
