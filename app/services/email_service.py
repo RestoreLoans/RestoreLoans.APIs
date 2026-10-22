@@ -470,19 +470,21 @@ class EmailService:
             is_local, p["envelope_sender"] or p["sender_email"], to_emails, message_bytes,
         )
 
-    def _open_connection(self, server, port, username, password, is_local):
+    _ALTERNATE_PORTS = {465: 587, 587: 465}
+
+    def _open_connection(self, server, port, username, password, is_local, timeout=30):
         if is_local:
-            srv = smtplib.SMTP(server, port, timeout=30)
+            srv = smtplib.SMTP(server, port, timeout=timeout)
             srv.ehlo("restoreloans.co.za")
             return srv
         if port == 465:
             # Implicit TLS (SMTPS)
-            srv = smtplib.SMTP_SSL(server, port, timeout=30, local_hostname="restoreloans.co.za")
+            srv = smtplib.SMTP_SSL(server, port, timeout=timeout, local_hostname="restoreloans.co.za")
             srv.ehlo("restoreloans.co.za")
             srv.login(username, password)
             return srv
         # STARTTLS (e.g. port 587)
-        srv = smtplib.SMTP(server, port, timeout=30)
+        srv = smtplib.SMTP(server, port, timeout=timeout)
         srv.ehlo("restoreloans.co.za")
         srv.starttls()
         srv.ehlo("restoreloans.co.za")
@@ -495,7 +497,7 @@ class EmailService:
     ):
         with self._conn_lock:
             cached = self._conn
-            if cached is not None and cached[0] == (server, port):
+            if cached is not None and cached[0][0] == server:
                 try:
                     cached[1].sendmail(envelope_sender, to_emails, message_bytes)
                     return
@@ -507,17 +509,48 @@ class EmailService:
                     except Exception:
                         pass
                     self._conn = None
-            srv = self._open_connection(server, port, username, password, is_local)
-            try:
-                srv.sendmail(envelope_sender, to_emails, message_bytes)
-                self._conn = ((server, port), srv)
-            except Exception:
+            # Some hosts block one SMTP submission port (e.g. Render blocks
+            # implicit TLS on 465 while allowing STARTTLS on 587), so fall back
+            # to the sibling port when the configured one is unreachable.
+            # 587 is tried first because it is the more widely reachable port.
+            alternate = self._ALTERNATE_PORTS.get(port)
+            if alternate is not None and not is_local:
+                candidates = (
+                    [alternate, port] if port == 465 else [port, alternate]
+                )
+            else:
+                candidates = [port]
+            last_err = None
+            for candidate in candidates:
+                timeout = 10
                 try:
-                    srv.quit()
-                except Exception:
-                    pass
-                self._conn = None
-                raise
+                    srv = self._open_connection(
+                        server, candidate, username, password, is_local, timeout=timeout
+                    )
+                except Exception as e:
+                    last_err = e
+                    logging.warning(
+                        "SMTP connection to %s:%s failed: %s", server, candidate, e
+                    )
+                    continue
+                try:
+                    srv.sendmail(envelope_sender, to_emails, message_bytes)
+                    self._conn = ((server, candidate), srv)
+                    if candidate != port:
+                        logging.warning(
+                            "SMTP port %s on %s unreachable; delivered via port %s",
+                            port, server, candidate,
+                        )
+                    return
+                except Exception as e:
+                    last_err = e
+                    try:
+                        srv.quit()
+                    except Exception:
+                        pass
+                    self._conn = None
+            if last_err is not None:
+                raise last_err
 
     def close(self):
         """Close the cached SMTP connection (e.g. on application shutdown)."""

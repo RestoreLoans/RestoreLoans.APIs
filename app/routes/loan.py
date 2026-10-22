@@ -13,9 +13,10 @@ import os
 from datetime import datetime
 import logging
 from app.services.email_service import email_service
+from app.utils.gcs_credentials import configure_gcs_credentials
 
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "app/utils/google.json"
+configure_gcs_credentials()
 router = APIRouter(
     prefix="/loans",
     tags=["Loans"]
@@ -377,6 +378,7 @@ def delete_loan(loan_id: int, db: Session = Depends(get_db)):
     return None
 def upload_to_gcs(file: UploadFile, folder: str = "loans", uid:str="") -> str:
     """Upload file to GCS and return its public URL."""
+    configure_gcs_credentials()
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
 
