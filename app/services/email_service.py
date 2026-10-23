@@ -390,88 +390,88 @@ class EmailService:
             from_header = (
                 f"{sender_name} <{sender_email}>" if sender_name else sender_email
             )
-        if is_html and attachments:
-            alt = MIMEMultipart("alternative")
-            alt["From"] = from_header
-            alt["To"] = ", ".join(to_list)
-            alt["Subject"] = subject
-            alt["Date"] = formatdate(localtime=True)
-            alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-            alt["X-Mailer"] = "RestoreLoans"
-            try:
-                text_body = re.sub(r"<style[\s\S]*?</style>", "", body or "", flags=re.I)
-                text_body = re.sub(r"<script[\s\S]*?</script>", "", text_body or "", flags=re.I)
-                text_body = re.sub(r"<[^>]+>", " ", text_body or "")
-                text_body = re.sub(r"\s+", " ", text_body).strip()
-            except Exception:
-                text_body = subject
-            alt.attach(MIMEText(text_body or "New Loan Application", "plain", _charset="utf-8"))
-            alt.attach(MIMEText(body or "", "html", _charset="utf-8"))
-            wrapper = MIMEMultipart("mixed")
-            wrapper["From"] = from_header
-            wrapper["To"] = ", ".join(to_list)
-            wrapper["Subject"] = subject
-            wrapper["Date"] = formatdate(localtime=True)
-            wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-            wrapper["X-Mailer"] = "RestoreLoans"
-            wrapper.attach(alt)
-            for file_bytes, filename in attachments:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(file_bytes or b"")
-                mime_encoders.encode_base64(part)
-                part.add_header(
-                    "Content-Disposition",
-                    "attachment",
-                    filename=("utf-8", "", filename),
-                )
-                wrapper.attach(part)
-            return wrapper
-        if is_html:
-            alt = MIMEMultipart("alternative")
-            alt["From"] = from_header
-            alt["To"] = ", ".join(to_list)
-            alt["Subject"] = subject
-            alt["Date"] = formatdate(localtime=True)
-            alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-            alt["X-Mailer"] = "RestoreLoans"
-            try:
-                text_body = re.sub(r"<style[\s\S]*?</style>", "", body or "", flags=re.I)
-                text_body = re.sub(r"<script[\s\S]*?</script>", "", text_body or "", flags=re.I)
-                text_body = re.sub(r"<[^>]+>", " ", text_body or "")
-                text_body = re.sub(r"\s+", " ", text_body).strip()
-            except Exception:
-                text_body = subject
-            alt.attach(MIMEText(text_body or subject, "plain", _charset="utf-8"))
-            alt.attach(MIMEText(body or "", "html", _charset="utf-8"))
-            return alt
-        message = MIMEText(body or "", content_type, _charset="utf-8")
-        message["From"] = from_header
-        message["To"] = ", ".join(to_list)
-        message["Subject"] = subject
-        message["Date"] = formatdate(localtime=True)
-        message["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-        message["X-Mailer"] = "RestoreLoans"
-        if attachments:
-            wrapper = MIMEMultipart("mixed")
-            wrapper["From"] = from_header
-            wrapper["To"] = ", ".join(to_list)
-            wrapper["Subject"] = subject
-            wrapper["Date"] = formatdate(localtime=True)
-            wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-            wrapper["X-Mailer"] = "RestoreLoans"
-            wrapper.attach(message)
-            for file_bytes, filename in attachments:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(file_bytes or b"")
-                mime_encoders.encode_base64(part)
-                part.add_header(
-                    "Content-Disposition",
-                    "attachment",
-                    filename=("utf-8", "", filename),
-                )
-                wrapper.attach(part)
-            return wrapper
-        return message
+            if is_html and attachments:
+                alt = MIMEMultipart("alternative")
+                alt["From"] = from_header
+                alt["To"] = ", ".join(to_list)
+                alt["Subject"] = subject
+                alt["Date"] = formatdate(localtime=True)
+                alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                alt["X-Mailer"] = "RestoreLoans"
+                try:
+                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body or "", flags=re.I)
+                    text_body = re.sub(r"<script[\s\S]*?</script>", "", text_body or "", flags=re.I)
+                    text_body = re.sub(r"<[^>]+>", " ", text_body or "")
+                    text_body = re.sub(r"\s+", " ", text_body).strip()
+                except Exception:
+                    text_body = subject
+                alt.attach(MIMEText(text_body or "New Loan Application", "plain", _charset="utf-8"))
+                alt.attach(MIMEText(body or "", "html", _charset="utf-8"))
+                wrapper = MIMEMultipart("mixed")
+                wrapper["From"] = from_header
+                wrapper["To"] = ", ".join(to_list)
+                wrapper["Subject"] = subject
+                wrapper["Date"] = formatdate(localtime=True)
+                wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                wrapper["X-Mailer"] = "RestoreLoans"
+                wrapper.attach(alt)
+                for file_bytes, filename in attachments:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(file_bytes or b"")
+                    mime_encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition",
+                        "attachment",
+                        filename=("utf-8", "", filename),
+                    )
+                    wrapper.attach(part)
+                return wrapper
+            if is_html:
+                alt = MIMEMultipart("alternative")
+                alt["From"] = from_header
+                alt["To"] = ", ".join(to_list)
+                alt["Subject"] = subject
+                alt["Date"] = formatdate(localtime=True)
+                alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                alt["X-Mailer"] = "RestoreLoans"
+                try:
+                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body or "", flags=re.I)
+                    text_body = re.sub(r"<script[\s\S]*?</script>", "", text_body or "", flags=re.I)
+                    text_body = re.sub(r"<[^>]+>", " ", text_body or "")
+                    text_body = re.sub(r"\s+", " ", text_body).strip()
+                except Exception:
+                    text_body = subject
+                alt.attach(MIMEText(text_body or subject, "plain", _charset="utf-8"))
+                alt.attach(MIMEText(body or "", "html", _charset="utf-8"))
+                return alt
+            message = MIMEText(body or "", content_type, _charset="utf-8")
+            message["From"] = from_header
+            message["To"] = ", ".join(to_list)
+            message["Subject"] = subject
+            message["Date"] = formatdate(localtime=True)
+            message["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+            message["X-Mailer"] = "RestoreLoans"
+            if attachments:
+                wrapper = MIMEMultipart("mixed")
+                wrapper["From"] = from_header
+                wrapper["To"] = ", ".join(to_list)
+                wrapper["Subject"] = subject
+                wrapper["Date"] = formatdate(localtime=True)
+                wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                wrapper["X-Mailer"] = "RestoreLoans"
+                wrapper.attach(message)
+                for file_bytes, filename in attachments:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(file_bytes or b"")
+                    mime_encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition",
+                        "attachment",
+                        filename=("utf-8", "", filename),
+                    )
+                    wrapper.attach(part)
+                return wrapper
+            return message
 
         # Dual/multi send (e.g. both restoreloans and Gmail): each recipient is
         # attempted on every profile; succeeds if any profile accepts the message.
