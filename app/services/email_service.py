@@ -390,6 +390,53 @@ class EmailService:
             from_header = (
                 f"{sender_name} <{sender_email}>" if sender_name else sender_email
             )
+            if is_html and attachments:
+                alt = MIMEMultipart("alternative")
+                alt["From"] = from_header
+                alt["To"] = ", ".join(to_list)
+                alt["Subject"] = subject
+                alt["Date"] = formatdate(localtime=True)
+                alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                import re
+
+                text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
+                text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
+                text_body = re.sub(r"<[^>]+>", " ", text_body)
+                text_body = re.sub(r"\s+", " ", text_body).strip()
+                alt.attach(MIMEText(text_body or "New Loan Application", "plain", _charset="utf-8"))
+                alt.attach(MIMEText(body, "html", _charset="utf-8"))
+                wrapper = MIMEMultipart("mixed")
+                wrapper["From"] = from_header
+                wrapper["To"] = ", ".join(to_list)
+                wrapper["Subject"] = subject
+                wrapper["Date"] = formatdate(localtime=True)
+                wrapper["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                wrapper.attach(alt)
+                for file_bytes, filename in attachments:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(file_bytes or b"")
+                    mime_encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition",
+                        "attachment",
+                        filename=("utf-8", "", filename),
+                    )
+                    wrapper.attach(part)
+                return wrapper
+            if is_html:
+                alt = MIMEMultipart("alternative")
+                alt["From"] = from_header
+                alt["To"] = ", ".join(to_list)
+                alt["Subject"] = subject
+                alt["Date"] = formatdate(localtime=True)
+                alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
+                text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
+                text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
+                text_body = re.sub(r"<[^>]+>", " ", text_body)
+                text_body = re.sub(r"\s+", " ", text_body).strip()
+                alt.attach(MIMEText(text_body or subject, "plain", _charset="utf-8"))
+                alt.attach(MIMEText(body, "html", _charset="utf-8"))
+                return alt
             message = MIMEText(body, content_type, _charset="utf-8")
             message["From"] = from_header
             message["To"] = ", ".join(to_list)
@@ -406,13 +453,15 @@ class EmailService:
                 wrapper.attach(message)
                 for file_bytes, filename in attachments:
                     part = MIMEBase("application", "octet-stream")
-                    part.set_payload(file_bytes)
+                    part.set_payload(file_bytes or b"")
                     mime_encoders.encode_base64(part)
                     part.add_header(
-                        "Content-Disposition", f'attachment; filename="{filename}"'
+                        "Content-Disposition",
+                        "attachment",
+                        filename=("utf-8", "", filename),
                     )
                     wrapper.attach(part)
-                message = wrapper
+                return wrapper
             return message
 
         # Dual/multi send (e.g. both restoreloans and Gmail): each recipient is
