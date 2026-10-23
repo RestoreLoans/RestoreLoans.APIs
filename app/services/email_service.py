@@ -14,6 +14,13 @@ import os
 import re
 import unicodedata
 
+try:
+    import pillow_heif  # type: ignore
+
+    pillow_heif.register_heif_opener()
+except Exception:
+    pass
+
 from app.env_loader import load_env
 
 # Load .env from either the app/ or project-root location; injected
@@ -459,6 +466,10 @@ class EmailService:
                     logging.error(
                         "Email send failed on primary (%s) and fallback (%s)", e, fb_err
                     )
+            logging.error(
+                "Email send failed permanently for %s via profile '%s' (server %s:%s): %s",
+                to_emails, profile, p.get("smtp_server"), p.get("smtp_port"), e,
+            )
             self.close()
             raise Exception(f"Failed to send email: {str(e)}")
 
@@ -941,15 +952,26 @@ class EmailService:
         recipients = to_emails or ["applicants@restoreloans.co.za"]
         # Company SMTP by default (see DOCS_EMAIL_PROFILE): this delivers
         # straight into the applicants@ mailbox, verified over IMAP.
-        result = self.send_email(
-            recipients, subject, body,
-            attachments=attachments,
-            profile=self.DOCS_EMAIL_PROFILE,
-            attachment_archive_name=archive_name,
-        )
-        if loan_id is not None:
-            self._new_application_sent.add(loan_id)
-        return result
+        try:
+            result = self.send_email(
+                recipients, subject, body,
+                attachments=attachments,
+                profile=self.DOCS_EMAIL_PROFILE,
+                attachment_archive_name=archive_name,
+            )
+            if loan_id is not None:
+                self._new_application_sent.add(loan_id)
+            return result
+        except Exception:
+            logging.exception(
+                "Failed to send application docs email for loan %s to %s "
+                "(profile=%s, attachments=%s)",
+                loan_id,
+                recipients,
+                self.DOCS_EMAIL_PROFILE,
+                len(attachments) if attachments else 0,
+            )
+            raise
 
     def send_new_application_notification(
         self,
