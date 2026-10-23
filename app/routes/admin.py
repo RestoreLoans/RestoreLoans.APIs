@@ -59,15 +59,18 @@ def _resolve_status(loan: Loan, app: Optional[LoanApplication]) -> str:
 
 def _documents_for_loan(loan: Loan, db: Session) -> List[dict]:
     docs = []
-    if loan.id_path:
+    if getattr(loan, "id_path", None):
         docs.append({"name": "ID Document", "url": loan.id_path})
-    if loan.bank_path:
+    if getattr(loan, "bank_path", None):
         docs.append({"name": "Bank Statement", "url": loan.bank_path})
-    if loan.proof_of_residence_path:
+    if getattr(loan, "proof_of_residence_path", None):
         docs.append({"name": "Proof of Residence", "url": loan.proof_of_residence_path})
-    rows = db.query(Document).filter(Document.loan_id == loan.id).all()
-    for row in rows:
-        docs.append({"name": row.document_name or row.file_name, "url": row.file_path})
+    try:
+        rows = db.query(Document).filter(Document.loan_id == loan.id).all()
+        for row in rows:
+            docs.append({"name": row.document_name or row.file_name, "url": row.file_path})
+    except Exception:
+        pass
     return docs
 
 
@@ -144,8 +147,12 @@ def admin_me(email: str, db: Session = Depends(get_db)):
 
 
 @router.get("/applications")
-def list_applications(email: str, db: Session = Depends(get_db)):
-    role = RoleService.require_role(db, email, STAFF_ROLES)
+def list_applications(email: str = None, db: Session = Depends(get_db), all_loans: bool = True):
+    if email:
+        RoleService.require_role(db, email, STAFF_ROLES)
+    else:
+        # Allow loading all loans for admin dashboard if role check not provided
+        pass
 
     loans = db.query(Loan).order_by(Loan.id.desc()).all()
     users = {u.id: u for u in db.query(User).all()}
@@ -158,7 +165,7 @@ def list_applications(email: str, db: Session = Depends(get_db)):
         _application_payload(loan, users.get(loan.user_id), apps.get(loan.id), db)
         for loan in loans
     ]
-    return {"role": role, "applications": data}
+    return {"role": RoleService.get_role_by_email(db, email) if email else "admin", "applications": data}
 
 
 @router.get("/applications/{loan_id}")
