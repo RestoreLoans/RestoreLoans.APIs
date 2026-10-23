@@ -398,14 +398,14 @@ class EmailService:
                 alt["Date"] = formatdate(localtime=True)
                 alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
                 try:
-                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
-                    text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
-                    text_body = re.sub(r"<[^>]+>", " ", text_body)
+                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body or "", flags=re.I)
+                    text_body = re.sub(r"<script[\s\S]*?</script>", "", text_body or "", flags=re.I)
+                    text_body = re.sub(r"<[^>]+>", " ", text_body or "")
                     text_body = re.sub(r"\s+", " ", text_body).strip()
                 except Exception:
                     text_body = subject
                 alt.attach(MIMEText(text_body or "New Loan Application", "plain", _charset="utf-8"))
-                alt.attach(MIMEText(body, "html", _charset="utf-8"))
+                alt.attach(MIMEText(body or "", "html", _charset="utf-8"))
                 wrapper = MIMEMultipart("mixed")
                 wrapper["From"] = from_header
                 wrapper["To"] = ", ".join(to_list)
@@ -432,14 +432,14 @@ class EmailService:
                 alt["Date"] = formatdate(localtime=True)
                 alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
                 try:
-                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
-                    text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
-                    text_body = re.sub(r"<[^>]+>", " ", text_body)
+                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body or "", flags=re.I)
+                    text_body = re.sub(r"<script[\s\S]*?</script>", "", text_body or "", flags=re.I)
+                    text_body = re.sub(r"<[^>]+>", " ", text_body or "")
                     text_body = re.sub(r"\s+", " ", text_body).strip()
                 except Exception:
                     text_body = subject
                 alt.attach(MIMEText(text_body or subject, "plain", _charset="utf-8"))
-                alt.attach(MIMEText(body, "html", _charset="utf-8"))
+                alt.attach(MIMEText(body or "", "html", _charset="utf-8"))
                 return alt
             message = MIMEText(body, content_type, _charset="utf-8")
             message["From"] = from_header
