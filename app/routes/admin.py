@@ -19,6 +19,7 @@ from app.schemas.admin import (
     AssignRoleRequest,
 )
 from app.services.roles import RoleService
+from app.services.email_service import email_service
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -72,23 +73,52 @@ def _documents_for_loan(loan: Loan, db: Session) -> List[dict]:
 
 def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApplication], db: Session) -> dict:
     company = getattr(user, "company", None) if user else None
+    outstanding_balance = None
+    try:
+        total_paid = 0.0
+        from app.models.transaction import Transaction
+
+        txns = db.query(Transaction).filter(Transaction.loan_id == loan.id).all()
+        for t in txns:
+            amt = getattr(t, "amount", None) or getattr(t, "transaction_amount", None)
+            if amt is not None:
+                try:
+                    total_paid += float(amt)
+                except Exception:
+                    pass
+        principal = float(loan.loan_amount or 0)
+        outstanding_balance = max(0.0, principal - total_paid)
+    except Exception:
+        outstanding_balance = loan.loan_amount
     return {
         "id": _format_loan_id(loan.id),
         "loanId": loan.id,
         "userId": loan.user_id,
+        "firstName": user.first_name if user else None,
+        "lastName": user.last_name if user else None,
         "customerName": f"{user.first_name} {user.last_name}".strip() if user else "",
+        "surname": user.last_name if user else None,
         "email": user.email if user else None,
         "phone": user.phone_number if user else None,
         "idNumber": user.id_number if user else None,
         "loanAmount": loan.loan_amount,
+        "amount": loan.loan_amount,
         "loanTerm": loan.loan_term,
+        "loan_period": loan.loan_term,
         "monthlyInstallment": loan.monthly_installment,
         "interestRate": loan.interest_rate,
         "loanType": loan.loan_type,
+        "loan_type": loan.loan_type,
         "status": _resolve_status(loan, app),
+        "balance": outstanding_balance,
+        "outstandingBalance": outstanding_balance,
         "applicationDate": loan.created_at.isoformat() if loan.created_at else None,
+        "applied_at": loan.created_at.isoformat() if loan.created_at else None,
+        "created_at": loan.created_at.isoformat() if loan.created_at else None,
         "disburseDate": loan.start_date.isoformat() if loan.start_date else None,
+        "start_date": loan.start_date.isoformat() if loan.start_date else None,
         "endDate": loan.end_date.isoformat() if loan.end_date else None,
+        "end_date": loan.end_date.isoformat() if loan.end_date else None,
         "employmentStatus": getattr(company, "employment_status", None) if company else None,
         "employerName": company.name if company else None,
         "decidedBy": app.decided_by if app else None,
@@ -187,6 +217,55 @@ def update_application_status(
     db.refresh(app)
 
     user = db.query(User).filter(User.id == loan.user_id).first()
+    try:
+        if user and user.email:
+            borrower_name = f"{user.first_name} {user.last_name}".strip() or user.email
+            if new_status == "approved":
+                email_service.send_loan_approval_email(
+                    borrower_name=borrower_name,
+                    loan_id=loan.id,
+                    amount=loan.loan_amount or 0,
+                    account_no=getattr(loan, "account_number", None) or "N/A",
+                    to_emails=[user.email],
+                )
+            elif new_status == "rejected":
+                email_service.send_loan_rejection_email(
+                    borrower_name=borrower_name,
+                    loan_id=loan.id,
+                    reason=body.notes or "Your application was not approved at this time.",
+                    to_emails=[user.email],
+                )
+            elif new_status in {"disbursed", "completed"}:
+                try:
+                    email_service.send_contract_signed_email(
+                        borrower_name=borrower_name,
+                        loan_id=loan.id,
+                        amount=loan.loan_amount or 0,
+                        account_no=getattr(loan, "account_number", None) or "N/A",
+                        to_emails=[user.email],
+                    )
+                except Exception:
+                    email_service.send_custom_loan_email(
+                        borrower_name=borrower_name,
+                        loan_id=loan.id,
+                        amount=loan.loan_amount or 0,
+                        status=new_status,
+                        message=body.notes or f"Your loan status has been updated to {new_status.replace('_', ' ')}.",
+                        to_emails=[user.email],
+                    )
+            else:
+                email_service.send_custom_loan_email(
+                    borrower_name=borrower_name,
+                    loan_id=loan.id,
+                    amount=loan.loan_amount or 0,
+                    status=new_status,
+                    message=body.notes or f"Your loan application status has been updated to {new_status.replace('_', ' ')}.",
+                    to_emails=[user.email],
+                )
+    except Exception:
+        import logging
+
+        logging.exception("Failed to send status update email for loan %s", loan.id)
     return _application_payload(loan, user, app, db)
 
 
