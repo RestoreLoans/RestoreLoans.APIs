@@ -397,12 +397,13 @@ class EmailService:
                 alt["Subject"] = subject
                 alt["Date"] = formatdate(localtime=True)
                 alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-                import re
-
-                text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
-                text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
-                text_body = re.sub(r"<[^>]+>", " ", text_body)
-                text_body = re.sub(r"\s+", " ", text_body).strip()
+                try:
+                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
+                    text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
+                    text_body = re.sub(r"<[^>]+>", " ", text_body)
+                    text_body = re.sub(r"\s+", " ", text_body).strip()
+                except Exception:
+                    text_body = subject
                 alt.attach(MIMEText(text_body or "New Loan Application", "plain", _charset="utf-8"))
                 alt.attach(MIMEText(body, "html", _charset="utf-8"))
                 wrapper = MIMEMultipart("mixed")
@@ -430,10 +431,13 @@ class EmailService:
                 alt["Subject"] = subject
                 alt["Date"] = formatdate(localtime=True)
                 alt["Message-ID"] = make_msgid(domain="restoreloans.co.za")
-                text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
-                text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
-                text_body = re.sub(r"<[^>]+>", " ", text_body)
-                text_body = re.sub(r"\s+", " ", text_body).strip()
+                try:
+                    text_body = re.sub(r"<style[\s\S]*?</style>", "", body, flags=re.I)
+                    text_body = re.sub(r"<script[\s\S]*?</script>", "", body, flags=re.I)
+                    text_body = re.sub(r"<[^>]+>", " ", text_body)
+                    text_body = re.sub(r"\s+", " ", text_body).strip()
+                except Exception:
+                    text_body = subject
                 alt.attach(MIMEText(text_body or subject, "plain", _charset="utf-8"))
                 alt.attach(MIMEText(body, "html", _charset="utf-8"))
                 return alt
