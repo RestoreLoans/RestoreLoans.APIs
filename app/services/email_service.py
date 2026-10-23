@@ -30,15 +30,14 @@ class EmailService:
 
     def __init__(self):
         # SMTP profile for the internal "New Loan Application" review email to
-        # applicants@restoreloans.co.za. It defaults to the company account
-        # (mail.restoreloans.co.za): that is where the applicants@ mailbox
-        # lives (verified over IMAP — mail sent this way is delivered straight
-        # into its INBOX), while mail routed via Gmail leaves through the
-        # domain's Ucebox MX and never reaches that store. Every other
+        # applicants@restoreloans.co.za. Defaults to the external Gmail account
+        # to avoid Render egress blocks to mail.restoreloans.co.za; Gmail routes
+        # through the domain's Ucebox MX (where applicants@ is read). Every other
         # notification keeps using the external Gmail account. Set
-        # DOCS_EMAIL_SMTP_PROFILE to "external" to flip just this one email.
+        # DOCS_EMAIL_SMTP_PROFILE to "restoreloans" to route via company SMTP if
+        # reachable.
         self.DOCS_EMAIL_PROFILE = (
-            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "restoreloans") or "restoreloans"
+            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "external") or "external"
         ).strip().lower()
         # Hard ceiling for any archive attached to outgoing mail. Images are
         # recompressed until the packed ZIP fits under this limit; the default
