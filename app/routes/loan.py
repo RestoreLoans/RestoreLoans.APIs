@@ -75,9 +75,9 @@ def create_loan(  loan_type: str = Form(...),
     start_date: str = Form(...),
     end_date: str = Form(...),
     user_id: int = Form(...),
-    id_document: UploadFile = File(...),
-    bank_statement: UploadFile = File(...),
-    proof_of_residence: UploadFile = File(...), db: Session = Depends(get_db)):
+    id_document: UploadFile = File(None),
+    bank_statement: UploadFile = File(None),
+    proof_of_residence: UploadFile = File(None), db: Session = Depends(get_db)):
     # Normalize loan_type so responses serialize correctly (schema uses a
     # lowercase enum while the DB column is a free-form string).
     loan_type = loan_type.strip().lower()
@@ -91,6 +91,14 @@ def create_loan(  loan_type: str = Form(...),
 
         )
 
+    # Most recent prior loan for this user, used to reuse documents when the
+    # applicant's documents are still recent (< 3 months) and uploads are disabled.
+    existing_loan = (
+        db.query(Loan)
+        .filter(Loan.user_id == user_id)
+        .order_by(Loan.id.desc())
+        .first()
+    )
     # Read document bytes upfront (needed for both GCS and email attachments)
     doc_files = [
         ("id_document", id_document),
@@ -99,26 +107,48 @@ def create_loan(  loan_type: str = Form(...),
     ]
     doc_bytes = {}
     for key, upload in doc_files:
+        if upload is None:
+            continue
         upload.file.seek(0)
         doc_bytes[key] = upload.file.read()
         upload.file.seek(0)
 
-    # Try GCS uploads (best effort — don't crash loan creation if GCS fails)
+    # Try GCS uploads (best effort — don't crash loan creation if GCS fails).
+    # When the applicant's documents are still recent (< 3 months) the upload
+    # controls are disabled, so we reuse the most recent stored document paths
+    # instead of requiring a fresh upload.
     id_path = None
     bank_path = None
     proof_path = None
-    try:
-        id_path = upload_to_gcs(id_document, "id_documents", user_id)
-    except Exception as e:
-        logging.warning("GCS upload failed for id_document: %s", e)
-    try:
-        bank_path = upload_to_gcs(bank_statement, "bank_statements", user_id)
-    except Exception as e:
-        logging.warning("GCS upload failed for bank_statement: %s", e)
-    try:
-        proof_path = upload_to_gcs(proof_of_residence, "residences", user_id)
-    except Exception as e:
-        logging.warning("GCS upload failed for proof_of_residence: %s", e)
+    if id_document is not None:
+        try:
+            id_path = upload_to_gcs(id_document, "id_documents", user_id)
+        except Exception as e:
+            logging.warning("GCS upload failed for id_document: %s", e)
+    elif existing_loan and getattr(existing_loan, "id_path", None):
+        id_path = existing_loan.id_path
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ID document is required")
+
+    if bank_statement is not None:
+        try:
+            bank_path = upload_to_gcs(bank_statement, "bank_statements", user_id)
+        except Exception as e:
+            logging.warning("GCS upload failed for bank_statement: %s", e)
+    elif existing_loan and getattr(existing_loan, "bank_path", None):
+        bank_path = existing_loan.bank_path
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Bank statement is required")
+
+    if proof_of_residence is not None:
+        try:
+            proof_path = upload_to_gcs(proof_of_residence, "residences", user_id)
+        except Exception as e:
+            logging.warning("GCS upload failed for proof_of_residence: %s", e)
+    elif existing_loan and getattr(existing_loan, "proof_of_residence_path", None):
+        proof_path = existing_loan.proof_of_residence_path
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Proof of residence is required")
 
     # Create and save the loan
     new_loan = Loan(
@@ -172,11 +202,33 @@ def create_loan(  loan_type: str = Form(...),
     #    re-downloading from GCS on the frontend).
     docs_email_sent = False
     try:
-        attachments = [
-            (doc_bytes["id_document"], id_document.filename or "id_document"),
-            (doc_bytes["bank_statement"], bank_statement.filename or "bank_statement"),
-            (doc_bytes["proof_of_residence"], proof_of_residence.filename or "proof_of_residence"),
-        ]
+        import urllib.request
+
+        def _download(url):
+            try:
+                with urllib.request.urlopen(url, timeout=30) as resp:
+                    return resp.read()
+            except Exception:
+                return None
+
+        id_bytes = doc_bytes.get("id_document")
+        bank_bytes = doc_bytes.get("bank_statement")
+        residence_bytes = doc_bytes.get("proof_of_residence")
+
+        if id_bytes is None and id_path:
+            id_bytes = _download(id_path)
+        if bank_bytes is None and bank_path:
+            bank_bytes = _download(bank_path)
+        if residence_bytes is None and proof_path:
+            residence_bytes = _download(proof_path)
+
+        attachments = []
+        if id_bytes is not None:
+            attachments.append((id_bytes, (id_document.filename if id_document else None) or (id_path.split("/")[-1] if id_path else "id_document")))
+        if bank_bytes is not None:
+            attachments.append((bank_bytes, (bank_statement.filename if bank_statement else None) or (bank_path.split("/")[-1] if bank_path else "bank_statement")))
+        if residence_bytes is not None:
+            attachments.append((residence_bytes, (proof_of_residence.filename if proof_of_residence else None) or (proof_path.split("/")[-1] if proof_path else "proof_of_residence")))
         email_service.send_application_with_docs_email(
             loan=new_loan,
             client=user,
