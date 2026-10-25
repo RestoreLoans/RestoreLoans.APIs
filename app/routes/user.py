@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
+from app.models.affordability import AffordabilityAssessment
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserLoginWithRegistration
 from app.services.auth import AuthService
 import logging
@@ -56,6 +57,50 @@ def get_user_by_login_and_registration(payload: UserLoginWithRegistration, db: S
 
     logger.info(f"Retrieved user information for {user.email}")
     return user
+
+@router.get("/affordability/{user_id}", status_code=status.HTTP_200_OK)
+def get_affordability(user_id: int, db: Session = Depends(get_db)):
+    rec = db.query(AffordabilityAssessment).filter(AffordabilityAssessment.user_id == user_id).first()
+    if not rec:
+        return {"found": False}
+    return {
+        "found": True,
+        "gross_monthly_income": rec.gross_monthly_income or 0,
+        "net_monthly_income": rec.net_monthly_income or 0,
+        "additional_income": rec.additional_income or 0,
+        "housing_expense": rec.housing_expense or 0,
+        "utilities_expense": rec.utilities_expense or 0,
+        "transport_expense": rec.transport_expense or 0,
+        "food_expense": rec.food_expense or 0,
+        "insurance_expense": rec.insurance_expense or 0,
+        "school_fees_expense": rec.school_fees_expense or 0,
+        "existing_loans_expense": rec.existing_loans_expense or 0,
+        "other_expenses": rec.other_expenses or 0,
+    }
+
+
+@router.post("/affordability/{user_id}", status_code=status.HTTP_200_OK)
+def save_affordability(user_id: int, payload: dict, db: Session = Depends(get_db)):
+    rec = db.query(AffordabilityAssessment).filter(AffordabilityAssessment.user_id == user_id).first()
+    if not rec:
+        rec = AffordabilityAssessment(user_id=user_id)
+        db.add(rec)
+    for field in [
+        "gross_monthly_income", "net_monthly_income", "additional_income",
+        "housing_expense", "utilities_expense", "transport_expense",
+        "food_expense", "insurance_expense", "school_fees_expense",
+        "existing_loans_expense", "other_expenses",
+    ]:
+        if field in payload:
+            try:
+                setattr(rec, field, float(payload[field] or 0))
+            except (TypeError, ValueError):
+                setattr(rec, field, 0.0)
+    from datetime import datetime, timezone
+    rec.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+    db.refresh(rec)
+    return {"message": "Affordability assessment saved."}
 
 @router.get("/debug/check-user/{email}", status_code=status.HTTP_200_OK)
 def debug_check_user(email: str, db: Session = Depends(get_db)):
