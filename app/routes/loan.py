@@ -5,6 +5,7 @@ from app.models.loan import Loan
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.loan_application import LoanApplication, STATUS_PENDING_APPROVAL
+from app.models.document_request import DocumentRequest
 from datetime import datetime as _dt, timezone as _tz
 from app.schemas.loan import LoanCreate, LoanResponse
 from app.schemas.loan_dashboard import LoanDashboardResponse, UserStats, LoanDashboardLoan, PaymentHistoryItem
@@ -295,6 +296,38 @@ def get_loan(loan_id: int, db: Session = Depends(get_db)):
             detail=f"Loan with ID {loan_id} does not exist."
         )
     return loan
+@router.post("/{loan_id}/documents/upload-replacement", status_code=status.HTTP_200_OK)
+def upload_replacement_document(
+    loan_id: int,
+    token: str,
+    document_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    req = (
+        db.query(DocumentRequest)
+        .filter(DocumentRequest.token == token, DocumentRequest.loan_id == loan_id)
+        .first()
+    )
+    if not req or req.document_type != document_type:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired upload link.")
+    if req.status not in ("pending", "rejected"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This request is no longer open.")
+
+    folder = {
+        "id_document": "id_documents",
+        "bank_statement": "bank_statements",
+        "proof_of_residence": "residences",
+    }.get(document_type, "documents")
+    url = upload_to_gcs(file, folder, loan_id)
+
+    req.uploaded_file_path = url
+    req.uploaded_at = _dt.now(_tz.utc).replace(tzinfo=None)
+    req.status = "uploaded"
+    db.commit()
+    db.refresh(req)
+    return {"message": "Document uploaded successfully.", "url": url, "request_id": req.id}
+
 @router.get("/by-user-id/{user_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
 def get_loan_by_user(user_id: int, db: Session = Depends(get_db)):
     loan = db.query(Loan).filter(Loan.user_id == user_id).first()

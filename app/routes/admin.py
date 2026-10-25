@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +15,8 @@ from app.models.loan_application import (
     VALID_APPLICATION_STATUSES,
     STATUS_PENDING_APPROVAL,
 )
+from app.models.document_request import DocumentRequest
+import secrets
 from app.models.user_role_assignment import ROLE_ADMIN, ROLE_MANAGER, ROLE_VIEWER
 from app.schemas.admin import (
     UpdateApplicationStatusRequest,
@@ -284,6 +287,119 @@ def update_application_status(
         logging.exception("Failed to send status update email for loan %s", loan.id)
     return _application_payload(loan, user, app, db)
 
+
+@router.post("/applications/{loan_id}/request-document")
+def request_document_update(
+    loan_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    email = body.get("email")
+    role = RoleService.require_role(db, email, {ROLE_ADMIN, ROLE_MANAGER})
+    doc_type = (body.get("document_type") or "").strip()
+    reason = (body.get("reason") or "").strip()
+    if doc_type not in {"id_document", "bank_statement", "proof_of_residence"}:
+        raise HTTPException(status_code=400, detail="Invalid document type.")
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    user = db.query(User).filter(User.id == loan.user_id).first()
+    if not user or not user.email:
+        raise HTTPException(status_code=404, detail="Applicant email not found.")
+
+    token = secrets.token_urlsafe(32)
+    req = DocumentRequest(
+        loan_id=loan.id,
+        document_type=doc_type,
+        requested_by=email,
+        reason=reason or "Document requires correction.",
+        token=token,
+        status="pending",
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+
+    frontend = os.getenv("FRONTEND_URL", "https://restoreloans.co.za")
+    upload_link = f"{frontend}/upload-document?token={token}&loan_id={loan.id}&document_type={doc_type}"
+
+    doc_label = doc_type.replace("_", " ").title()
+    subject = f"Document Update Required - Loan #{loan.id}"
+    body_html = f"""
+    <html><body style="font-family: Arial, sans-serif; padding: 20px;">
+      <h2>Document Update Required</h2>
+      <p>Dear {user.first_name} {user.last_name},</p>
+      <p>We need an updated copy of your <strong>{doc_label}</strong> for loan application #{loan.id}.</p>
+      <p><strong>Reason:</strong> {reason or 'The submitted document is incorrect, invalid, or expired.'}</p>
+      <p>Please upload the replacement document using this secure link:</p>
+      <p><a href="{upload_link}">{upload_link}</a></p>
+      <p>You only need to upload the requested document; previously approved documents remain valid.</p>
+      <p>Best regards,<br>RestoreLoans Team</p>
+    </body></html>
+    """
+    try:
+        email_service.send_email([user.email], subject, body_html, is_html=True)
+    except Exception:
+        logging.exception("Failed to send document request email for loan %s", loan.id)
+
+    return {
+        "message": "Document update requested.",
+        "request_id": req.id,
+        "token": token,
+        "upload_link": upload_link,
+    }
+
+
+@router.get("/applications/{loan_id}/document-requests")
+def list_document_requests(loan_id: int, email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, STAFF_ROLES)
+    reqs = db.query(DocumentRequest).filter(DocumentRequest.loan_id == loan_id).order_by(DocumentRequest.id.desc()).all()
+    return {
+        "requests": [
+            {
+                "id": r.id,
+                "document_type": r.document_type,
+                "requested_by": r.requested_by,
+                "reason": r.reason,
+                "status": r.status,
+                "requested_at": r.requested_at.isoformat() if r.requested_at else None,
+                "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
+                "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                "reviewer_email": r.reviewer_email,
+                "review_outcome": r.review_outcome,
+                "uploaded_file_path": r.uploaded_file_path,
+            }
+            for r in reqs
+        ]
+    }
+
+
+@router.post("/document-requests/{request_id}/review")
+def review_document_request(request_id: int, body: dict, db: Session = Depends(get_db)):
+    email = body.get("email")
+    RoleService.require_role(db, email, {ROLE_ADMIN, ROLE_MANAGER})
+    req = db.query(DocumentRequest).filter(DocumentRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Document request not found.")
+    new_status = (body.get("status") or "").strip().lower()
+    if new_status not in {"approved", "rejected"}:
+        raise HTTPException(status_code=400, detail="Status must be approved or rejected.")
+    req.status = new_status
+    req.reviewer_email = email
+    req.reviewed_at = _utcnow()
+    req.review_outcome = body.get("notes")
+    # Update loan document path if approved and uploaded
+    if new_status == "approved" and req.uploaded_file_path:
+        loan = db.query(Loan).filter(Loan.id == req.loan_id).first()
+        if loan:
+            if req.document_type == "id_document":
+                loan.id_path = req.uploaded_file_path
+            elif req.document_type == "bank_statement":
+                loan.bank_path = req.uploaded_file_path
+            elif req.document_type == "proof_of_residence":
+                loan.proof_of_residence_path = req.uploaded_file_path
+    db.commit()
+    return {"message": f"Document request {new_status}."}
 
 @router.delete("/applications/{loan_id}", status_code=status.HTTP_200_OK)
 def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
