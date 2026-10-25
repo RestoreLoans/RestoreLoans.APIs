@@ -244,7 +244,7 @@ def update_application_status(
                     borrower_name=borrower_name,
                     loan_id=loan.id,
                     amount=loan.loan_amount or 0,
-                    account_no=getattr(loan, "account_number", None) or "N/A",
+                    account_no=getattr(getattr(user, "bank", None), "account_number", None) or "N/A",
                     to_emails=[user.email],
                 )
             elif new_status == "rejected":
@@ -260,7 +260,7 @@ def update_application_status(
                         borrower_name=borrower_name,
                         loan_id=loan.id,
                         amount=loan.loan_amount or 0,
-                        account_no=getattr(loan, "account_number", None) or "N/A",
+                        account_no=getattr(getattr(user, "bank", None), "account_number", None) or "N/A",
                         to_emails=[user.email],
                     )
                 except Exception:
