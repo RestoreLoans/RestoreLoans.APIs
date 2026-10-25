@@ -12,6 +12,7 @@ from app.models.document import Document
 from app.models.loan_application import (
     LoanApplication,
     VALID_APPLICATION_STATUSES,
+    STATUS_PENDING_APPROVAL,
 )
 from app.models.user_role_assignment import ROLE_ADMIN, ROLE_MANAGER, ROLE_VIEWER
 from app.schemas.admin import (
@@ -209,10 +210,18 @@ def update_application_status(
 
     app = db.query(LoanApplication).filter(LoanApplication.loan_id == loan.id).first()
     if not app:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="This loan has no application record to update.",
+        # Legacy loans created before the LoanApplication table existed may not
+        # have a record yet. Create one on demand so status updates (and the
+        # resulting email notifications) work for every loan.
+        now = _utcnow()
+        app = LoanApplication(
+            loan_id=loan.id,
+            status=STATUS_PENDING_APPROVAL,
+            created_at=now,
+            updated_at=now,
         )
+        db.add(app)
+        db.flush()
 
     app.status = new_status
     app.decided_by = body.email

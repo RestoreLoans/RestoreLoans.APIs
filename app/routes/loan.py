@@ -208,7 +208,31 @@ def create_loan(  loan_type: str = Form(...),
 @router.get("/", response_model=list[LoanResponse], status_code=status.HTTP_200_OK)
 def get_all_loans(db: Session = Depends(get_db)):
     loans = db.query(Loan).all()
-    return loans
+    app_statuses = {
+        a.loan_id: a.status for a in db.query(LoanApplication).all()
+    }
+    result = []
+    for loan in loans:
+        status_value = app_statuses.get(loan.id) or _map_loan_status(loan.status)
+        result.append(
+            LoanResponse(
+                loan_type=loan.loan_type,
+                loan_amount=loan.loan_amount,
+                interest_rate=loan.interest_rate,
+                loan_term=loan.loan_term,
+                monthly_installment=loan.monthly_installment,
+                start_date=loan.start_date,
+                end_date=loan.end_date,
+                id_path=loan.id_path,
+                bank_path=loan.bank_path,
+                proof_of_residence_path=loan.proof_of_residence_path,
+                id=loan.id,
+                user_id=loan.user_id,
+                status=status_value,
+                created_at=loan.created_at,
+            )
+        )
+    return result
 
 @router.get("/{loan_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
 def get_loan(loan_id: int, db: Session = Depends(get_db)):
