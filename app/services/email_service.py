@@ -44,7 +44,7 @@ class EmailService:
         # DOCS_EMAIL_SMTP_PROFILE to "restoreloans" to route via company SMTP if
         # reachable.
         self.DOCS_EMAIL_PROFILE = (
-            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "external") or "external"
+            os.getenv("DOCS_EMAIL_SMTP_PROFILE", "admin") or "admin"
         ).strip().lower()
         # Hard ceiling for any archive attached to outgoing mail. Images are
         # recompressed until the packed ZIP fits under this limit; the default
@@ -95,6 +95,19 @@ class EmailService:
                     os.getenv("MAIL_FROM")
                     or os.getenv("SMTP_ENVELOPE_SENDER")
                     or os.getenv("SENDER_EMAIL")
+                ),
+            },
+            # Admin sender profile: sends as admin@restoreloans.co.za.
+            "admin": {
+                "smtp_server": os.getenv("ADMIN_SMTP_SERVER", os.getenv("SMTP_SERVER", "smtp.gmail.com")),
+                "smtp_port": int(os.getenv("ADMIN_SMTP_PORT", os.getenv("SMTP_PORT", "587"))),
+                "smtp_username": os.getenv("ADMIN_SMTP_USERNAME", os.getenv("SMTP_USERNAME")),
+                "smtp_password": os.getenv("ADMIN_SMTP_PASSWORD", os.getenv("SMTP_PASSWORD")),
+                "sender_email": os.getenv("ADMIN_SENDER_EMAIL", "admin@restoreloans.co.za"),
+                "sender_name": os.getenv("ADMIN_SENDER_NAME", "RestoreLoans"),
+                "envelope_sender": (
+                    os.getenv("ADMIN_MAIL_FROM")
+                    or os.getenv("ADMIN_SENDER_EMAIL", "admin@restoreloans.co.za")
                 ),
             },
         }
@@ -508,9 +521,7 @@ class EmailService:
             self._send_via_profile(p, flat, to_emails)
             return True
         except Exception as e:
-            fallback_name = (
-                "external" if profile == "restoreloans" else "fallback"
-            )
+            fallback_name = "fallback" if profile == "external" else "external"
             fallback = self.profiles.get(fallback_name)
             if fallback is not None and fallback is not p:
                 try:
