@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -301,6 +301,49 @@ def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": f"Application {_format_loan_id(loan_id)} deleted."}
 
+
+@router.get("/logins")
+def list_user_logins(email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, STAFF_ROLES)
+    users = db.query(User).order_by(User.id.desc()).all()
+    data = []
+    for u in users:
+        data.append({
+            "id": u.id,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "email": u.email,
+            "is_active": u.is_active,
+            "failed_login_attempts": getattr(u, "failed_login_attempts", 0) or 0,
+            "locked_until": u.locked_until.isoformat() if getattr(u, "locked_until", None) else None,
+            "last_login": u.last_login.isoformat() if getattr(u, "last_login", None) else None,
+            "created_at": u.created_at.isoformat() if hasattr(u.created_at, "isoformat") else str(u.created_at),
+            "is_locked": bool(getattr(u, "locked_until", None) and u.locked_until and u.locked_until > _utcnow()),
+        })
+    return {"logins": data}
+
+
+@router.post("/users/{user_id}/unlock")
+def unlock_user(user_id: int, email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, {ROLE_ADMIN})
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    u.failed_login_attempts = 0
+    u.locked_until = None
+    db.commit()
+    return {"message": f"User {u.email} unlocked."}
+
+
+@router.post("/users/{user_id}/lock")
+def lock_user(user_id: int, email: str, db: Session = Depends(get_db)):
+    RoleService.require_role(db, email, {ROLE_ADMIN})
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    u.locked_until = _utcnow() + timedelta(hours=24)
+    db.commit()
+    return {"message": f"User {u.email} locked."}
 
 @router.get("/staff")
 def list_staff(email: str, db: Session = Depends(get_db)):

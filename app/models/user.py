@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Enum, ForeignKey
 from app.database import Base
 from sqlalchemy.orm import relationship
 import enum
@@ -32,6 +32,10 @@ class User(Base):
     nationality = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    # Login security tracking
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    last_login = Column(DateTime, nullable=True)
     # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
     company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)

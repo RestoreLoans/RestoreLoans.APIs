@@ -219,13 +219,32 @@ class AuthService:
     @staticmethod
     def login_user(db: Session, user_data: OAuth2PasswordRequestForm):
         user = db.query(User).filter(User.email == user_data.email).first()
+        now = _utcnow()
+
+        # Account locked after 3 failed attempts
+        if user and getattr(user, "locked_until", None) and user.locked_until > now:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account locked due to 3 failed login attempts. Try again later.",
+            )
+
         if not user or not verify_password(user_data.password, user.password):
+            if user:
+                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+                if user.failed_login_attempts >= 3:
+                    user.locked_until = now + timedelta(minutes=15)
+                db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-            
+
+        # Success: reset counters and record last login
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.last_login = now
+        db.commit()
 
         access_token = create_access_token(data={"sub": user.email})
         role = RoleService.get_user_role(db, user)
