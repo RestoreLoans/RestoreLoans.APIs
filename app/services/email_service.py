@@ -97,12 +97,17 @@ class EmailService:
                     or os.getenv("SENDER_EMAIL")
                 ),
             },
-            # Admin sender profile: sends as admin@restoreloans.co.za.
+            # Admin sender profile: the From header is admin@restoreloans.co.za,
+            # but delivery goes through the company mail server (authenticated as
+            # the company mailbox). Sending from Gmail with a restoreloans.co.za
+            # From address is blocked by Gmail (552 5.7.0 spoofing block).
             "admin": {
-                "smtp_server": os.getenv("ADMIN_SMTP_SERVER", os.getenv("SMTP_SERVER", "smtp.gmail.com")),
-                "smtp_port": int(os.getenv("ADMIN_SMTP_PORT", os.getenv("SMTP_PORT", "587"))),
-                "smtp_username": os.getenv("ADMIN_SMTP_USERNAME", os.getenv("SMTP_USERNAME")),
-                "smtp_password": os.getenv("ADMIN_SMTP_PASSWORD", os.getenv("SMTP_PASSWORD")),
+                "smtp_server": os.getenv("ADMIN_SMTP_SERVER") or os.getenv("FALLBACK_SMTP_SERVER") or "mail.restoreloans.co.za",
+                "smtp_port": int(
+                    os.getenv("ADMIN_SMTP_PORT") or os.getenv("FALLBACK_SMTP_PORT") or "465"
+                ),
+                "smtp_username": os.getenv("ADMIN_SMTP_USERNAME") or os.getenv("FALLBACK_SMTP_USERNAME"),
+                "smtp_password": os.getenv("ADMIN_SMTP_PASSWORD") or os.getenv("FALLBACK_SMTP_PASSWORD"),
                 "sender_email": os.getenv("ADMIN_SENDER_EMAIL", "admin@restoreloans.co.za"),
                 "sender_name": os.getenv("ADMIN_SENDER_NAME", "RestoreLoans"),
                 "envelope_sender": (
