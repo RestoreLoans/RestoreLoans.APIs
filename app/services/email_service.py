@@ -2,6 +2,7 @@ import smtplib
 import logging
 import threading
 import io
+import base64
 import zipfile
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -393,6 +394,13 @@ class EmailService:
                     "Could not compress attachments; sending them uncompressed"
                 )
 
+        if self._resend_enabled():
+            try:
+                self._send_via_resend(to_emails, subject, body, is_html, attachments, profile)
+                return True
+            except Exception as e:
+                logging.error("Resend send failed for %s (%s); trying SMTP", to_emails, e)
+
         p = self.profiles.get(profile)
         if p is None:
             if profile != "external":
@@ -546,6 +554,48 @@ class EmailService:
             )
             self.close()
             raise Exception(f"Failed to send email: {str(e)}")
+
+    @staticmethod
+    def _resend_enabled():
+        return (
+            os.getenv("MAIL_PROVIDER", "").strip().lower() == "resend"
+            and bool(os.getenv("RESEND_API_KEY"))
+        )
+
+    def _send_via_resend(self, to_emails, subject, body, is_html, attachments, profile):
+        """Send through the Resend HTTPS API (domain must be verified in Resend)."""
+        import requests as http_requests
+
+        p = self.profiles.get(profile) or self.profiles["external"]
+        sender = p["sender_email"]
+        from_header = f"{p['sender_name']} <{sender}>" if p.get("sender_name") else sender
+        payload = {
+            "from": from_header,
+            "to": list(to_emails),
+            "subject": subject,
+        }
+        if is_html:
+            payload["html"] = body or ""
+        else:
+            payload["text"] = body or ""
+        if attachments:
+            payload["attachments"] = [
+                {
+                    "filename": self._safe_attachment_name(name),
+                    "content": base64.b64encode(data or b"").decode("ascii"),
+                }
+                for data, name in attachments
+            ]
+        resp = http_requests.post(
+            "https://api.resend.com/emails",
+            json=payload,
+            headers={"Authorization": f"Bearer {os.getenv('RESEND_API_KEY')}"},
+            timeout=60,
+        )
+        if resp.status_code >= 300:
+            raise Exception(f"Resend returned {resp.status_code}: {resp.text[:300]}")
+        logging.info("Resend accepted message %s for %s", resp.json().get("id"), to_emails)
+        return resp.json().get("id")
 
     def _send_via_profile(self, p, message_bytes, to_emails):
         is_local = p["smtp_server"] in ("127.0.0.1", "localhost")

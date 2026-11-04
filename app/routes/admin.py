@@ -419,39 +419,11 @@ def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
 
 
 @router.get("/email-diagnostics")
-def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends(get_db)):
-    """Check, from the server's own network, which mail ports are reachable.
-
-    With send_test=true, also sends one probe application email to
-    applicants@restoreloans.co.za through the live docs-email path and returns
-    the exact error if it fails.
-    """
+def email_diagnostics(email: str, db: Session = Depends(get_db)):
+    """Report which mail ports and email settings the server can use."""
     import socket
-    from types import SimpleNamespace
 
     RoleService.require_role(db, email, {ROLE_ADMIN})
-    test_result = None
-    if send_test:
-        stamp = _utcnow().strftime("%Y%m%d%H%M%S")
-        probe_loan = SimpleNamespace(
-            id=0, loan_amount=0, interest_rate=0, loan_term=0, monthly_installment=0,
-            start_date=None, end_date=None, loan_type="diagnostic",
-        )
-        probe_client = SimpleNamespace(
-            first_name="Diagnostic", last_name=f"Probe {stamp}", id_number="",
-            email="", phone_number="",
-        )
-        try:
-            email_service.send_application_with_docs_email(
-                loan=probe_loan,
-                client=probe_client,
-                to_emails=["applicants@restoreloans.co.za"],
-                attachments=[(b"%PDF-1.4 diagnostic", "diagnostic.pdf")],
-                force=True,
-            )
-            test_result = {"sent": True, "subject_marker": f"Diagnostic Probe {stamp}"}
-        except Exception as exc:
-            test_result = {"sent": False, "error": str(exc)[:500]}
     targets = [
         ("mail.restoreloans.co.za", 465),
         ("mail.restoreloans.co.za", 587),
@@ -472,8 +444,9 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
         "docs_profile_server": profile.get("smtp_server"),
         "docs_profile_port": profile.get("smtp_port"),
         "docs_profile_sender": profile.get("sender_email"),
+        "email_provider": os.getenv("MAIL_PROVIDER", "smtp"),
+        "resend_key_set": bool(os.getenv("RESEND_API_KEY")),
         "connectivity": results,
-        "test_send": test_result,
     }
 
 
