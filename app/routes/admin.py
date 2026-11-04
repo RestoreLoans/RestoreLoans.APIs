@@ -419,11 +419,25 @@ def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
 
 
 @router.get("/email-diagnostics")
-def email_diagnostics(email: str, db: Session = Depends(get_db)):
+def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends(get_db)):
     """Report which mail ports and email settings the server can use."""
     import socket
 
     RoleService.require_role(db, email, {ROLE_ADMIN})
+    test_result = None
+    if send_test:
+        try:
+            msg_id = email_service._send_via_resend(
+                ["applicants@restoreloans.co.za"],
+                "Delivery test - RestoreLoans Resend check",
+                "<p>Delivery test from the RestoreLoans API via Resend. No action needed.</p>",
+                True,
+                [(b"%PDF-1.4 delivery test", "delivery_test.pdf")],
+                "admin",
+            )
+            test_result = {"sent": True, "resend_id": msg_id}
+        except Exception as exc:
+            test_result = {"sent": False, "error": str(exc)[:500]}
     targets = [
         ("mail.restoreloans.co.za", 465),
         ("mail.restoreloans.co.za", 587),
@@ -447,6 +461,7 @@ def email_diagnostics(email: str, db: Session = Depends(get_db)):
         "email_provider": os.getenv("MAIL_PROVIDER", "smtp"),
         "resend_key_set": bool(os.getenv("RESEND_API_KEY")),
         "connectivity": results,
+        "test_send": test_result,
     }
 
 
