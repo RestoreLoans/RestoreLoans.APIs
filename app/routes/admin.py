@@ -418,24 +418,6 @@ def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
     return {"message": f"Application {_format_loan_id(loan_id)} deleted."}
 
 
-@router.post("/email-test-temp")
-def email_test_temp(email: str, db: Session = Depends(get_db)):
-    RoleService.require_role(db, email, {ROLE_ADMIN})
-    stamp = _utcnow().strftime("%H%M%S")
-    try:
-        msg_id = email_service._send_via_resend(
-            ["applicants@restoreloans.co.za"],
-            f"Resend connection test {stamp}",
-            "<p>This is a connection test from RestoreLoans.</p>",
-            True,
-            [(b"%PDF-1.4 test", "test.pdf")],
-            "admin",
-        )
-        return {"sent": True, "resend_id": msg_id, "subject_marker": stamp}
-    except Exception as exc:
-        return {"sent": False, "error": str(exc)[:500]}
-
-
 @router.get("/email-diagnostics")
 def email_diagnostics(email: str, db: Session = Depends(get_db)):
     """Report which mail ports and email settings the server can use."""
