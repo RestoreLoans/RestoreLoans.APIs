@@ -418,6 +418,36 @@ def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
     return {"message": f"Application {_format_loan_id(loan_id)} deleted."}
 
 
+@router.get("/email-diagnostics")
+def email_diagnostics(email: str, db: Session = Depends(get_db)):
+    """Check, from the server's own network, which mail ports are reachable."""
+    import socket
+
+    RoleService.require_role(db, email, {ROLE_ADMIN})
+    targets = [
+        ("mail.restoreloans.co.za", 465),
+        ("mail.restoreloans.co.za", 587),
+        ("mail.restoreloans.co.za", 993),
+        ("smtp.gmail.com", 587),
+        ("smtp.gmail.com", 465),
+    ]
+    results = []
+    for host, port in targets:
+        try:
+            socket.create_connection((host, port), timeout=8).close()
+            results.append({"host": host, "port": port, "reachable": True})
+        except Exception as exc:
+            results.append({"host": host, "port": port, "reachable": False, "error": str(exc)[:200]})
+    profile = email_service.profiles.get(email_service.DOCS_EMAIL_PROFILE, {})
+    return {
+        "docs_profile": email_service.DOCS_EMAIL_PROFILE,
+        "docs_profile_server": profile.get("smtp_server"),
+        "docs_profile_port": profile.get("smtp_port"),
+        "docs_profile_sender": profile.get("sender_email"),
+        "connectivity": results,
+    }
+
+
 @router.get("/logins")
 def list_user_logins(email: str, db: Session = Depends(get_db)):
     RoleService.require_role(db, email, STAFF_ROLES)
