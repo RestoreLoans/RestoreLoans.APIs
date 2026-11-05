@@ -4,7 +4,7 @@ from app.database import get_db
 from app.models.company import Company
 from app.schemas.company import CompanyResponse
 from app.schemas.email import SendLoanEmailRequest
-from app.services.email_service import email_service  # Change from 'email' to 'email_service'
+from app.services.email_service import email_service, DOCS_RECIPIENT  # Change from 'email' to 'email_service'
 
 from pydantic import BaseModel
 from typing import List
@@ -265,7 +265,7 @@ def send_application_docs_email(
     if getattr(loan, "docs_email_sent", False):
         return {
             "success": True,
-            "message": "Application documents already sent to applicants@restoreloans.co.za",
+            "message": f"Application documents already sent to {DOCS_RECIPIENT}",
             "already_sent": True,
         }
 
@@ -275,7 +275,7 @@ def send_application_docs_email(
         # The applicant's email is always included so the user who applied also
         # receives a copy of their application with the supporting documents.
         applicant_email = client.email if client else None
-        recipients = ["applicants@restoreloans.co.za"]
+        recipients = [DOCS_RECIPIENT]
         if applicant_email:
             recipients.append(applicant_email)
 
@@ -307,7 +307,7 @@ def send_application_docs_email(
 
     return {
         "success": True,
-        "message": "Application documents sent to applicants@restoreloans.co.za and the applicant",
+        "message": f"Application documents sent to {DOCS_RECIPIENT} and the applicant",
     }
 
 @router.post("/mapping-insert", response_model=TransactionResponse)

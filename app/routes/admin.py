@@ -23,7 +23,7 @@ from app.schemas.admin import (
     AssignRoleRequest,
 )
 from app.services.roles import RoleService
-from app.services.email_service import email_service
+from app.services.email_service import email_service, DOCS_RECIPIENT
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -443,7 +443,7 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
             email_service.send_application_with_docs_email(
                 loan=probe_loan,
                 client=probe_client,
-                to_emails=["applicants@restoreloans.co.za"],
+                to_emails=[DOCS_RECIPIENT],
                 attachments=[(b"%PDF-1.4 diagnostic", "diagnostic.pdf")],
                 force=True,
             )

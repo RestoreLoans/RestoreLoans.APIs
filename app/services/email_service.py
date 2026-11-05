@@ -28,6 +28,14 @@ from app.env_loader import load_env
 # environment variables always take precedence.
 load_env()
 
+# Mailbox that receives the "New Loan Application" emails with the applicant's
+# documents. admin@restoreloans.co.za is read by the team; override with
+# APPLICATION_DOCS_RECIPIENT if the team mailbox changes.
+DOCS_RECIPIENT = (
+    os.getenv("APPLICATION_DOCS_RECIPIENT", "admin@restoreloans.co.za").strip()
+    or "admin@restoreloans.co.za"
+)
+
 
 class EmailService:
     def _from_header(self, sender_email):
@@ -1073,7 +1081,7 @@ class EmailService:
                 "</html>",
             ]
         )
-        recipients = to_emails or ["applicants@restoreloans.co.za"]
+        recipients = to_emails or [DOCS_RECIPIENT]
         # Company SMTP by default (see DOCS_EMAIL_PROFILE): this delivers
         # straight into the applicants@ mailbox, verified over IMAP.
         try:
@@ -1135,7 +1143,7 @@ class EmailService:
             ]
         )
         return self.send_email(
-            to_emails or ["applicants@restoreloans.co.za"], subject, body
+            to_emails or [DOCS_RECIPIENT], subject, body
         )
 
     def send_welcome_email(

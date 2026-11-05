@@ -13,7 +13,7 @@ from google.cloud import storage
 import os
 from datetime import datetime
 import logging
-from app.services.email_service import email_service
+from app.services.email_service import email_service, DOCS_RECIPIENT
 from app.utils.gcs_credentials import configure_gcs_credentials
 
 
@@ -235,7 +235,7 @@ def create_loan(  loan_type: str = Form(...),
             client=user,
             employer=getattr(user, "company", None),
             bank=getattr(user, "bank", None),
-            to_emails=["applicants@restoreloans.co.za"],
+            to_emails=[DOCS_RECIPIENT],
             attachments=attachments,
         )
         docs_email_sent = True
