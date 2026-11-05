@@ -63,7 +63,7 @@ def _parse_interest_rate(value: str) -> float:
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid interest_rate: '{value}'"
+            detail="We could not read the interest rate. Please check the loan details and try again."
         )
 
 
@@ -88,7 +88,7 @@ def create_loan(  loan_type: str = Form(...),
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with ID"
+            detail="We could not find your profile. Please log out, log back in and try again."
 
         )
 
@@ -129,7 +129,7 @@ def create_loan(  loan_type: str = Form(...),
     elif existing_loan and getattr(existing_loan, "id_path", None):
         id_path = existing_loan.id_path
     else:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ID document is required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please upload your ID document to continue.")
 
     if bank_statement is not None:
         try:
@@ -139,7 +139,7 @@ def create_loan(  loan_type: str = Form(...),
     elif existing_loan and getattr(existing_loan, "bank_path", None):
         bank_path = existing_loan.bank_path
     else:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Bank statement is required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please upload your bank statement to continue.")
 
     if proof_of_residence is not None:
         try:
@@ -149,7 +149,7 @@ def create_loan(  loan_type: str = Form(...),
     elif existing_loan and getattr(existing_loan, "proof_of_residence_path", None):
         proof_path = existing_loan.proof_of_residence_path
     else:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Proof of residence is required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please upload your proof of residence to continue.")
 
     # Create and save the loan
     new_loan = Loan(
@@ -293,7 +293,7 @@ def get_loan(loan_id: int, db: Session = Depends(get_db)):
     if not loan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Loan with ID {loan_id} does not exist."
+            detail="We could not find this loan. Please check the details and try again."
         )
     return loan
 @router.post("/{loan_id}/documents/upload-replacement", status_code=status.HTTP_200_OK)
@@ -312,7 +312,7 @@ def upload_replacement_document(
     if not req or req.document_type != document_type:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired upload link.")
     if req.status not in ("pending", "rejected"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This request is no longer open.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This document request has already been completed.")
 
     folder = {
         "id_document": "id_documents",
@@ -334,7 +334,7 @@ def get_loan_by_user(user_id: int, db: Session = Depends(get_db)):
     if not loan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Loan with ID {user_id} does not exist."
+            detail="We could not find a loan for this profile."
         )
     return loan
 
@@ -345,7 +345,7 @@ def get_loan_dashboard(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="We could not find your profile. Please log out, log back in and try again."
         )
 
     loans = db.query(Loan).filter(Loan.user_id == user_id).all()
@@ -462,7 +462,7 @@ def update_loan(loan_id: int, loan_data: dict, db: Session = Depends(get_db)):
     if not loan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Loan with ID {loan_id} does not exist."
+            detail="We could not find this loan. Please check the details and try again."
         )
 
     # Update loan fields
@@ -479,7 +479,7 @@ def delete_loan(loan_id: int, db: Session = Depends(get_db)):
     if not loan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Loan with ID {loan_id} does not exist."
+            detail="We could not find this loan. Please check the details and try again."
         )
 
     db.delete(loan)

@@ -169,7 +169,7 @@ def send_loan_email(
             if not recipients:
                 raise HTTPException(
                     status_code=400,
-                    detail="No recipient email available for application email",
+                    detail="We could not find an email address for this applicant.",
                 )
             email_service.send_loan_application_email(
                 borrower_name=transaction.borrower,
@@ -213,8 +213,8 @@ def send_loan_email(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Invalid email type. Use: application, approval, "
-                    "rejection, or custom"
+                    "Please choose a valid email type: application, approval, "
+                    "rejection or custom."
                 )
             )
         
@@ -232,7 +232,7 @@ def send_loan_email(
                           email_data.transaction_id)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send email: {str(e)}"
+            detail="We could not send the email right now. Please try again in a few minutes."
         )
 
 @router.post("/send-application-docs-email")
@@ -293,7 +293,7 @@ def send_application_docs_email(
                           transaction_id)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send application docs email: {exc}"
+            detail="We could not send the application documents right now. Please try again in a few minutes."
         )
 
     # Record that the docs email went out so no worker re-sends it.
