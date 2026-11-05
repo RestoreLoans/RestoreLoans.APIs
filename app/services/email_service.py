@@ -29,11 +29,10 @@ from app.env_loader import load_env
 load_env()
 
 # Mailbox that receives the "New Loan Application" emails with the applicant's
-# documents. admin@restoreloans.co.za is read by the team; override with
-# APPLICATION_DOCS_RECIPIENT if the team mailbox changes.
+# documents. Override with APPLICATION_DOCS_RECIPIENT if it changes.
 DOCS_RECIPIENT = (
-    os.getenv("APPLICATION_DOCS_RECIPIENT", "admin@restoreloans.co.za").strip()
-    or "admin@restoreloans.co.za"
+    os.getenv("APPLICATION_DOCS_RECIPIENT", "applicants@restoreloans.co.za").strip()
+    or "applicants@restoreloans.co.za"
 )
 
 
