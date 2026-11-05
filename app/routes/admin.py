@@ -479,6 +479,25 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
         gcs["bucket_reachable"] = bool(storage.Client().bucket("restoreloans").exists())
     except Exception as exc:
         gcs["error"] = str(exc)[:300]
+    resend_domains = None
+    if os.getenv("RESEND_API_KEY"):
+        try:
+            import requests as http_requests
+
+            r = http_requests.get(
+                "https://api.resend.com/domains",
+                headers={"Authorization": f"Bearer {os.getenv('RESEND_API_KEY')}"},
+                timeout=20,
+            )
+            if r.status_code < 300:
+                resend_domains = [
+                    {"name": d.get("name"), "status": d.get("status")}
+                    for d in r.json().get("data", [])
+                ]
+            else:
+                resend_domains = {"error": f"Resend returned {r.status_code}: {r.text[:200]}"}
+        except Exception as exc:
+            resend_domains = {"error": str(exc)[:200]}
     profile = email_service.profiles.get(email_service.DOCS_EMAIL_PROFILE, {})
     return {
         "docs_profile": email_service.DOCS_EMAIL_PROFILE,
@@ -488,6 +507,8 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
         "email_provider": os.getenv("MAIL_PROVIDER", "smtp"),
         "resend_key_set": bool(os.getenv("RESEND_API_KEY")),
         "document_storage": gcs,
+        "resend_domains": resend_domains,
+        "recent_send_errors": email_service.recent_send_errors,
         "connectivity": results,
         "test_send": test_result,
     }

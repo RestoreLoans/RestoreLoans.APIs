@@ -88,6 +88,19 @@ class EmailService:
         # (e.g. when both the create_loan auto-send and the manual
         # send-loan-email endpoint fire for the same loan).
         self._loan_ack_sent = set()
+        # Most recent send failures (newest last), shown in admin diagnostics.
+        self.recent_send_errors = []
+
+    def _record_send_error(self, channel, recipients, error):
+        from datetime import datetime, timezone
+
+        self.recent_send_errors.append({
+            "at": datetime.now(timezone.utc).isoformat(),
+            "channel": channel,
+            "to": list(recipients or []),
+            "error": str(error)[:500],
+        })
+        del self.recent_send_errors[:-10]
 
     def _load_profiles(self):
         self.profiles = {
@@ -406,6 +419,7 @@ class EmailService:
                 self._send_via_resend(to_emails, subject, body, is_html, attachments, profile)
                 return True
             except Exception as e:
+                self._record_send_error("resend", to_emails, e)
                 logging.error("Resend send failed for %s (%s); trying SMTP", to_emails, e)
 
         p = self.profiles.get(profile)
@@ -555,6 +569,7 @@ class EmailService:
                     logging.error(
                         "Email send failed on primary (%s) and fallback (%s)", e, fb_err
                     )
+            self._record_send_error(f"smtp:{profile}", to_emails, e)
             logging.error(
                 "Email send failed permanently for %s via profile '%s' (server %s:%s): %s",
                 to_emails, profile, p.get("smtp_server"), p.get("smtp_port"), e,
