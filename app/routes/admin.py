@@ -464,6 +464,21 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
             results.append({"host": host, "port": port, "reachable": True})
         except Exception as exc:
             results.append({"host": host, "port": port, "reachable": False, "error": str(exc)[:200]})
+    gcs = {"credentials_env_set": False, "bucket_reachable": False}
+    try:
+        from app.utils.gcs_credentials import configure_gcs_credentials
+        from google.cloud import storage
+
+        configure_gcs_credentials()
+        gcs["credentials_env_set"] = bool(
+            os.getenv("GOOGLE_CREDENTIALS_JSON")
+            or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+            or os.getenv("GCS_CREDENTIALS_JSON")
+            or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        )
+        gcs["bucket_reachable"] = bool(storage.Client().bucket("restoreloans").exists())
+    except Exception as exc:
+        gcs["error"] = str(exc)[:300]
     profile = email_service.profiles.get(email_service.DOCS_EMAIL_PROFILE, {})
     return {
         "docs_profile": email_service.DOCS_EMAIL_PROFILE,
@@ -472,6 +487,7 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
         "docs_profile_sender": profile.get("sender_email"),
         "email_provider": os.getenv("MAIL_PROVIDER", "smtp"),
         "resend_key_set": bool(os.getenv("RESEND_API_KEY")),
+        "document_storage": gcs,
         "connectivity": results,
         "test_send": test_result,
     }
