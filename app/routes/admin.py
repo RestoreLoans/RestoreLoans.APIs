@@ -494,6 +494,10 @@ def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends
                     {"name": d.get("name"), "status": d.get("status")}
                     for d in r.json().get("data", [])
                 ]
+            elif "restricted_api_key" in r.text:
+                resend_domains = {
+                    "note": "The Resend key is send-only, which is correct. Check the domain status in the Resend dashboard under Domains."
+                }
             else:
                 resend_domains = {"error": f"Resend returned {r.status_code}: {r.text[:200]}"}
         except Exception as exc:
