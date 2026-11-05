@@ -555,8 +555,15 @@ class EmailService:
             self._send_via_profile(p, flat, to_emails)
             return True
         except Exception as e:
-            fallback_name = "fallback" if profile == "external" else "external"
-            fallback = self.profiles.get(fallback_name)
+            if profile == "admin":
+                # Never fall back to Gmail for admin@: Gmail rewrites or blocks the
+                # restoreloans.co.za From address and still reports success, so the
+                # team never receives the email. Fail visibly instead.
+                fallback_name = None
+                fallback = None
+            else:
+                fallback_name = "fallback" if profile == "external" else "external"
+                fallback = self.profiles.get(fallback_name)
             if fallback is not None and fallback is not p:
                 try:
                     self._send_via_profile(fallback, flat, to_emails)
