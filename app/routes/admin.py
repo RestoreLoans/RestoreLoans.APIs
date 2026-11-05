@@ -419,11 +419,37 @@ def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
 
 
 @router.get("/email-diagnostics")
-def email_diagnostics(email: str, db: Session = Depends(get_db)):
-    """Report which mail ports and email settings the server can use."""
+def email_diagnostics(email: str, send_test: bool = False, db: Session = Depends(get_db)):
+    """Report which mail ports and email settings the server can use.
+
+    With send_test=true, sends one test application email (with a ZIP) to
+    applicants@restoreloans.co.za through the live docs-email path. No loan
+    record is created.
+    """
     import socket
+    from types import SimpleNamespace
 
     RoleService.require_role(db, email, {ROLE_ADMIN})
+    test_result = None
+    if send_test:
+        probe_loan = SimpleNamespace(
+            id=0, loan_amount=0, interest_rate=0, loan_term=0, monthly_installment=0,
+            start_date=None, end_date=None, loan_type="diagnostic",
+        )
+        probe_client = SimpleNamespace(
+            first_name="Diagnostic", last_name="Probe", id_number="", email="", phone_number="",
+        )
+        try:
+            email_service.send_application_with_docs_email(
+                loan=probe_loan,
+                client=probe_client,
+                to_emails=["applicants@restoreloans.co.za"],
+                attachments=[(b"%PDF-1.4 diagnostic", "diagnostic.pdf")],
+                force=True,
+            )
+            test_result = {"sent": True, "attachment": "Diagnostic_Probe_application_documents.zip"}
+        except Exception as exc:
+            test_result = {"sent": False, "error": str(exc)[:500]}
     targets = [
         ("mail.restoreloans.co.za", 465),
         ("mail.restoreloans.co.za", 587),
@@ -447,6 +473,7 @@ def email_diagnostics(email: str, db: Session = Depends(get_db)):
         "email_provider": os.getenv("MAIL_PROVIDER", "smtp"),
         "resend_key_set": bool(os.getenv("RESEND_API_KEY")),
         "connectivity": results,
+        "test_send": test_result,
     }
 
 
