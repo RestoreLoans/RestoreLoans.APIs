@@ -99,3 +99,8 @@ app.include_router(transaction.router)
 @app.get("/")
 def read_root():
     return {"message": "Welcome to RestoreLoans API"}
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
