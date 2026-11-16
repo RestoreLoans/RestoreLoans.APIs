@@ -69,6 +69,8 @@ def _documents_for_loan(loan: Loan, db: Session) -> List[dict]:
         docs.append({"name": "Bank Statement", "url": loan.bank_path})
     if getattr(loan, "proof_of_residence_path", None):
         docs.append({"name": "Proof of Residence", "url": loan.proof_of_residence_path})
+    if getattr(loan, "payslip_path", None):
+        docs.append({"name": "Payslip", "url": loan.payslip_path})
     try:
         rows = db.query(Document).filter(Document.loan_id == loan.id).all()
         for row in rows:
@@ -298,7 +300,7 @@ def request_document_update(
     role = RoleService.require_role(db, email, {ROLE_ADMIN, ROLE_MANAGER})
     doc_type = (body.get("document_type") or "").strip()
     reason = (body.get("reason") or "").strip()
-    if doc_type not in {"id_document", "bank_statement", "proof_of_residence"}:
+    if doc_type not in {"id_document", "bank_statement", "proof_of_residence", "payslip"}:
         raise HTTPException(status_code=400, detail="Invalid document type.")
     loan = db.query(Loan).filter(Loan.id == loan_id).first()
     if not loan:

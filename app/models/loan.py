@@ -33,6 +33,7 @@ class Loan(Base):
     id_path = Column(String(900))
     bank_path = Column(String(900))
     proof_of_residence_path = Column(String(900))
+    payslip_path = Column(String(900))
     # Set once the "New Loan Application" email (with the applicant's documents
     # attached) has been sent to applicants@restoreloans.co.za. Persisted in the
     # DB so it is shared across worker processes (in-memory guards are not).

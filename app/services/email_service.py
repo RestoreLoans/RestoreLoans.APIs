@@ -1034,6 +1034,7 @@ class EmailService:
             ("id_path", "id_document"),
             ("bank_path", "bank_statement"),
             ("proof_of_residence_path", "proof_of_residence"),
+            ("payslip_path", "payslip"),
         ]:
             url = getattr(loan, attr, None)
             if url:
@@ -1093,7 +1094,7 @@ class EmailService:
                 *self._build_details_html(client, employer, bank, loan),
                 "    </div>",
                 "    <p>Supporting documents (ID, bank statement, "
-                "proof of residence) are attached to this email as a single "
+                "proof of residence, payslip) are attached to this email as a single "
                 f"compressed ZIP archive ({archive_name}).</p>",
                 "    <br>",
                 "    <p>Best regards,<br><strong>"
