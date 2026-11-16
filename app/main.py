@@ -75,6 +75,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": errors})
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Something went wrong. Please try again in a few minutes."},
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Or specify your frontend's URL
