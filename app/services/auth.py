@@ -441,6 +441,12 @@ class AuthService:
         employer = payload.employerDetails
         bank = payload.bankDetails
 
+        import re as _re
+        if not _re.fullmatch(r"[A-Za-z\s'-]+", (client.name or "").strip()):
+            raise HTTPException(status_code=400, detail="First name must contain letters only.")
+        if not _re.fullmatch(r"[A-Za-z\s'-]+", (client.surname or "").strip()):
+            raise HTTPException(status_code=400, detail="Surname must contain letters only.")
+
         user = db.query(User).filter(User.email == client.email).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
