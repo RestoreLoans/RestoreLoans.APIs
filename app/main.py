@@ -26,6 +26,12 @@ _EXTRA_COLUMNS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_number VARCHAR(100)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS marital_status VARCHAR(50)",
+    "CREATE INDEX IF NOT EXISTS idx_loans_user_id ON loans(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_loans_created_at ON loans(created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_loan_applications_loan_id ON loan_applications(loan_id)",
+    "CREATE INDEX IF NOT EXISTS idx_transactions_loan_id ON transactions(loan_id)",
+    "CREATE INDEX IF NOT EXISTS idx_documents_loan_id ON documents(loan_id)",
+    "CREATE INDEX IF NOT EXISTS idx_document_requests_loan_id ON document_requests(loan_id)",
 ]
 
 

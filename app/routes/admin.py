@@ -80,14 +80,18 @@ def _documents_for_loan(loan: Loan, db: Session) -> List[dict]:
     return docs
 
 
-def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApplication], db: Session) -> dict:
+def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApplication], db: Session,
+                         txns_by_loan=None, docs_by_loan=None) -> dict:
     company = getattr(user, "company", None) if user else None
     outstanding_balance = None
     try:
         total_paid = 0.0
         from app.models.transaction import Transaction
 
-        txns = db.query(Transaction).filter(Transaction.loan_id == loan.id).all()
+        if txns_by_loan is not None:
+            txns = txns_by_loan.get(loan.id, [])
+        else:
+            txns = db.query(Transaction).filter(Transaction.loan_id == loan.id).all()
         for t in txns:
             amt = getattr(t, "amount", None) or getattr(t, "transaction_amount", None)
             if amt is not None:
@@ -155,7 +159,10 @@ def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApp
         "decidedBy": app.decided_by if app else None,
         "decidedAt": app.decided_at.isoformat() if app and app.decided_at else None,
         "notes": app.notes if app else None,
-        "documents": _documents_for_loan(loan, db),
+        "documents": (
+            docs_by_loan.get(loan.id, []) if docs_by_loan is not None
+            else _documents_for_loan(loan, db)
+        ),
     }
 
 
@@ -189,8 +196,37 @@ def list_applications(email: str = None, db: Session = Depends(get_db), all_loan
         for a in db.query(LoanApplication).all()
     }
 
+    # Pre-fetch all transactions and documents in two queries instead of one
+    # query per loan (avoids N+1 on large loan lists).
+    from app.models.transaction import Transaction
+    from app.models.document import Document
+
+    all_txns = db.query(Transaction).all()
+    txns_by_loan = {}
+    for t in all_txns:
+        txns_by_loan.setdefault(t.loan_id, []).append(t)
+
+    all_docs = db.query(Document).all()
+    docs_by_loan = {}
+    for loan in loans:
+        docs = []
+        if getattr(loan, "id_path", None):
+            docs.append({"name": "ID Document", "url": loan.id_path})
+        if getattr(loan, "bank_path", None):
+            docs.append({"name": "Bank Statement", "url": loan.bank_path})
+        if getattr(loan, "proof_of_residence_path", None):
+            docs.append({"name": "Proof of Residence", "url": loan.proof_of_residence_path})
+        if getattr(loan, "payslip_path", None):
+            docs.append({"name": "Payslip", "url": loan.payslip_path})
+        docs_by_loan[loan.id] = docs
+    for d in all_docs:
+        docs_by_loan.setdefault(d.loan_id, []).append(
+            {"name": d.document_name or d.file_name, "url": d.file_path}
+        )
+
     data = [
-        _application_payload(loan, users.get(loan.user_id), apps.get(loan.id), db)
+        _application_payload(loan, users.get(loan.user_id), apps.get(loan.id), db,
+                             txns_by_loan=txns_by_loan, docs_by_loan=docs_by_loan)
         for loan in loans
     ]
     return {"role": RoleService.get_role_by_email(db, email) if email else "admin", "applications": data}
