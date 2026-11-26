@@ -815,6 +815,45 @@ class EmailService:
         )
         return self.send_email(to_emails, subject, body)
 
+    def send_debit_order_notification_email(
+        self,
+        borrower_name: str,
+        loan_id: int,
+        amount: float,
+        account_no: str,
+        to_emails: List[str],
+    ):
+        subject = f"Debit Order Verification - Loan #{loan_id}"
+        body = "\n".join(
+            [
+                "<html>",
+                "  <body style=\"font-family: Arial, sans-serif; padding: 20px;\">",
+                "    <h2 style=\"color: #2c3e50;\">Debit Order Verification Required</h2>",
+                f"    <p>Dear {borrower_name},</p>",
+                "    <p>Your loan application has been approved. Before the loan",
+                "    can be finalized, please look out for the debit order",
+                "    verification/check process. You may be asked to confirm or",
+                "    authorize the debit order on your account.</p>",
+                "    <div style=\"background-color: #f8f9fa; padding: 15px; "
+                "border-radius: 5px; margin: 20px 0;\">",
+                "      <p><strong>Loan Details:</strong></p>",
+                "      <ul>",
+                f"        <li>Loan ID: #{loan_id}</li>",
+                f"        <li>Approved Amount: R {amount:,.2f}</li>",
+                f"        <li>Account Number: {account_no}</li>",
+                "      </ul>",
+                "    </div>",
+                "    <p>Please ensure your bank account has sufficient funds and",
+                "    that you complete any verification steps promptly so that",
+                "    your loan can be finalized without delay.</p>",
+                "    <br>",
+                "    <p>Best regards,<br><strong>RestoreLoans Team</strong></p>",
+                "  </body>",
+                "</html>",
+            ]
+        )
+        return self.send_email(to_emails, subject, body)
+
     def send_loan_rejection_email(
         self,
         borrower_name: str,

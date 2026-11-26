@@ -36,6 +36,9 @@ class User(Base):
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime, nullable=True)
     last_login = Column(DateTime, nullable=True)
+    # Optional employee number and marital status for customer details
+    employee_number = Column(String(100), nullable=True)
+    marital_status = Column(String(50), nullable=True)
     # Define the relationship
     transactions = relationship("Transaction", back_populates="user")
     company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
