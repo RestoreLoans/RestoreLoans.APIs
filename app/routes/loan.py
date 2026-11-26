@@ -346,6 +346,19 @@ def upload_replacement_document(
     db.refresh(req)
     return {"message": "Document uploaded successfully.", "url": url, "request_id": req.id}
 
+@router.get("/count-this-month/{user_id}")
+def count_loans_this_month(user_id: int, db: Session = Depends(get_db)):
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    count = (
+        db.query(Loan)
+        .filter(Loan.user_id == user_id, Loan.created_at >= start)
+        .count()
+    )
+    return {"user_id": user_id, "count": count}
+
 @router.get("/by-user-id/{user_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
 def get_loan_by_user(user_id: int, db: Session = Depends(get_db)):
     loan = db.query(Loan).filter(Loan.user_id == user_id).first()
