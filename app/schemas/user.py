@@ -23,6 +23,8 @@ class ClientDetails(BaseModel):
     dob: Optional[date] = None  # Pydantic will auto-parse ISO date strings
     nationality: Optional[int] = None
     gender: str
+    employeeNumber: Optional[str] = None
+    maritalStatus: Optional[str] = None
 
 class EmployerDetails(BaseModel):
     name: str
@@ -97,6 +99,8 @@ class UserBase(BaseModel):
     is_active: bool
     company_id: Optional[int] = None
     bank_id: Optional[int] = None
+    employee_number: Optional[str] = None
+    marital_status: Optional[str] = None
 
     class Config:
         from_attributes = True

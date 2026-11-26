@@ -120,7 +120,9 @@ class AuthService:
             postal_code=client.code,
             language=client.language,
             dob=dob,
-            nationality=client.nationality
+            nationality=client.nationality,
+            employee_number=getattr(client, "employeeNumber", None),
+            marital_status=getattr(client, "maritalStatus", None),
         )
 
         db.add(db_user)
@@ -295,6 +297,8 @@ class AuthService:
             "dob": dob,
             "nationality": user.nationality,
             "gender": user.gender.value if isinstance(user.gender, enum.Enum) else user.gender,
+            "employeeNumber": getattr(user, "employee_number", None),
+            "maritalStatus": getattr(user, "marital_status", None),
         }
 
         employer_details = None
@@ -475,6 +479,10 @@ class AuthService:
         user.postal_code = client.code
         user.language = client.language
         user.nationality = client.nationality
+        if getattr(client, "employeeNumber", None) is not None:
+            user.employee_number = client.employeeNumber
+        if getattr(client, "maritalStatus", None) is not None:
+            user.marital_status = client.maritalStatus
         # Only overwrite the date of birth when one was submitted, so a blank
         # field on the edit form cannot silently wipe the stored value.
         if client.dob is not None:
