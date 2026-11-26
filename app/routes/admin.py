@@ -110,6 +110,30 @@ def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApp
         "email": user.email if user else None,
         "phone": user.phone_number if user else None,
         "idNumber": user.id_number if user else None,
+        "title": getattr(user, "title", None) if user else None,
+        "homephone": getattr(user, "homephone", None) if user else None,
+        "homeAdd1": getattr(user, "home_add1", None) if user else None,
+        "homeAdd2": getattr(user, "home_add2", None) if user else None,
+        "suburb": getattr(user, "suburb", None) if user else None,
+        "town": getattr(user, "town", None) if user else None,
+        "postalCode": getattr(user, "postal_code", None) if user else None,
+        "language": getattr(user, "language", None) if user else None,
+        "dob": user.dob.isoformat() if user and getattr(user, "dob", None) else None,
+        "nationality": getattr(user, "nationality", None) if user else None,
+        "gender": (user.gender.value if user and hasattr(user.gender, "value") else user.gender) if user else None,
+        "employeeNumber": getattr(user, "employee_number", None) if user else None,
+        "maritalStatus": getattr(user, "marital_status", None) if user else None,
+        "paymentDate": (
+            company.pay_day_date.isoformat() if company and getattr(company, "pay_day_date", None) else None
+        ),
+        "employerName": company.name if company else None,
+        "employmentStatus": getattr(company, "employment_status", None) if company else None,
+        "bankName": getattr(getattr(user, "bank", None), "bank_name", None) if user else None,
+        "branchName": getattr(getattr(user, "bank", None), "branch_name", None) if user else None,
+        "branchCode": getattr(getattr(user, "bank", None), "branch_code", None) if user else None,
+        "accountHolder": getattr(getattr(user, "bank", None), "account_holder_name", None) if user else None,
+        "accountNumber": getattr(getattr(user, "bank", None), "account_number", None) if user else None,
+        "accountType": getattr(getattr(user, "bank", None), "account_type", None) if user else None,
         "loanAmount": loan.loan_amount,
         "amount": loan.loan_amount,
         "loanTerm": loan.loan_term,
@@ -128,8 +152,6 @@ def _application_payload(loan: Loan, user: Optional[User], app: Optional[LoanApp
         "start_date": loan.start_date.isoformat() if loan.start_date else None,
         "endDate": loan.end_date.isoformat() if loan.end_date else None,
         "end_date": loan.end_date.isoformat() if loan.end_date else None,
-        "employmentStatus": getattr(company, "employment_status", None) if company else None,
-        "employerName": company.name if company else None,
         "decidedBy": app.decided_by if app else None,
         "decidedAt": app.decided_at.isoformat() if app and app.decided_at else None,
         "notes": app.notes if app else None,
@@ -249,6 +271,16 @@ def update_application_status(
                     account_no=getattr(getattr(user, "bank", None), "account_number", None) or "N/A",
                     to_emails=[user.email],
                 )
+                try:
+                    email_service.send_debit_order_notification_email(
+                        borrower_name=borrower_name,
+                        loan_id=loan.id,
+                        amount=loan.loan_amount or 0,
+                        account_no=getattr(getattr(user, "bank", None), "account_number", None) or "N/A",
+                        to_emails=[user.email],
+                    )
+                except Exception:
+                    logging.exception("Failed to send debit order notification for loan %s", loan.id)
             elif new_status == "rejected":
                 email_service.send_loan_rejection_email(
                     borrower_name=borrower_name,
@@ -402,6 +434,34 @@ def review_document_request(request_id: int, body: dict, db: Session = Depends(g
                 loan.proof_of_residence_path = req.uploaded_file_path
     db.commit()
     return {"message": f"Document request {new_status}."}
+
+@router.post("/applications/{loan_id}/custom-email")
+def send_custom_email(loan_id: int, body: dict, db: Session = Depends(get_db)):
+    email = body.get("email")
+    RoleService.require_role(db, email, {ROLE_ADMIN, ROLE_MANAGER})
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    user = db.query(User).filter(User.id == loan.user_id).first()
+    if not user or not user.email:
+        raise HTTPException(status_code=404, detail="Applicant email not found.")
+    message = (body.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required.")
+    borrower_name = f"{user.first_name} {user.last_name}".strip() or user.email
+    try:
+        email_service.send_custom_loan_email(
+            borrower_name=borrower_name,
+            loan_id=loan.id,
+            amount=loan.loan_amount or 0,
+            status="Custom Message",
+            message=message,
+            to_emails=[user.email],
+        )
+    except Exception:
+        logging.exception("Failed to send custom email for loan %s", loan.id)
+        raise HTTPException(status_code=500, detail="We could not send the email. Please try again.")
+    return {"message": "Custom email sent."}
 
 @router.delete("/applications/{loan_id}", status_code=status.HTTP_200_OK)
 def delete_application(loan_id: int, email: str, db: Session = Depends(get_db)):
