@@ -20,6 +20,12 @@ import app.models as models
 _EXTRA_COLUMNS = [
     "ALTER TABLE companies ADD COLUMN IF NOT EXISTS employment_status VARCHAR(20)",
     "ALTER TABLE loans ADD COLUMN IF NOT EXISTS docs_email_sent BOOLEAN",
+    "ALTER TABLE loans ADD COLUMN IF NOT EXISTS payslip_path VARCHAR(900)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_number VARCHAR(100)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS marital_status VARCHAR(50)",
 ]
 
 

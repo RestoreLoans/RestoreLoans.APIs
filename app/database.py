@@ -33,6 +33,11 @@ logging.getLogger(__name__).info(
 
 SQLALCHEMY_DATABASE_URL = DATABASE_URL
 
+# Render Postgres requires SSL. Append sslmode=require if not already present.
+if "sslmode" not in (SQLALCHEMY_DATABASE_URL or "").lower():
+    sep = "&" if "?" in SQLALCHEMY_DATABASE_URL else "?"
+    SQLALCHEMY_DATABASE_URL = f"{SQLALCHEMY_DATABASE_URL}{sep}sslmode=require"
+
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     pool_size=20,
